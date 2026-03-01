@@ -1,0 +1,276 @@
+---
+title: Error handling
+description: Learn how effect-playwright provides typed error handling with PlaywrightError
+---
+
+Effect-playwright wraps all Playwright errors in a typed `PlaywrightError` type, enabling compile-time error tracking and type-safe error handling using Effect's error management system.
+
+## PlaywrightError structure
+
+The `PlaywrightError` class extends Effect's `Data.TaggedError` and contains two fields:
+
+```typescript
+export class PlaywrightError extends Data.TaggedError("PlaywrightError")<{
+  reason: PlaywrightErrorReason;
+  cause: unknown;
+}> {}
+
+export type PlaywrightErrorReason = "Timeout" | "Unknown";
+```
+
+- **reason**: Distinguishes between timeout errors (`"Timeout"`) and all other errors (`"Unknown"`)
+- **cause**: The original error from Playwright
+
+This structure lets you handle timeouts differently from other failures.
+
+## How errors are wrapped
+
+All Playwright promise-based operations are wrapped using the `wrapError` function from `errors.ts:28-40`:
+
+```typescript
+export function wrapError(error: unknown): PlaywrightError {
+  if (error instanceof errors.TimeoutError) {
+    return new PlaywrightError({
+      reason: "Timeout",
+      cause: error,
+    });
+  } else {
+    return new PlaywrightError({
+      reason: "Unknown",
+      cause: error,
+    });
+  }
+}
+```
+
+This function checks if the error is a Playwright `TimeoutError` and categorizes it accordingly.
+
+## Typed effects
+
+All methods that can fail return `Effect.Effect<T, PlaywrightError>`, making errors part of the type signature:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  // This effect can fail with PlaywrightError
+  yield* page.goto("https://example.com");
+  
+  // Type: Effect.Effect<string, PlaywrightError>
+  const title = yield* page.title;
+}).pipe(Effect.scoped);
+```
+
+The type system tracks that these operations can fail with `PlaywrightError`, so you can't forget to handle them.
+
+## Handling specific error types
+
+You can pattern match on the error reason to handle timeouts differently:
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect, Match } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  const result = yield* page.goto("https://example.com").pipe(
+    Effect.catchAll((error) =>
+      Match.value(error.reason).pipe(
+        Match.when("Timeout", () =>
+          Effect.logWarning("Navigation timed out").pipe(
+            Effect.as(null),
+          ),
+        ),
+        Match.when("Unknown", () =>
+          Effect.logError("Navigation failed").pipe(
+            Effect.as(null),
+          ),
+        ),
+        Match.exhaustive,
+      ),
+    ),
+  );
+}).pipe(Effect.scoped);
+```
+
+## Recovering from errors
+
+Effect provides several combinators for error recovery:
+
+### catchAll
+
+Handle all errors of a specific type:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  yield* page.goto("https://example.com").pipe(
+    Effect.catchAll((error) =>
+      Effect.gen(function* () {
+        yield* Effect.log(`Navigation failed: ${error.reason}`);
+        // Return a fallback value or effect
+        return yield* page.goto("https://fallback.com");
+      }),
+    ),
+  );
+});
+```
+
+### catchTag
+
+Catch errors by their tag:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  yield* page.goto("https://example.com").pipe(
+    Effect.catchTag("PlaywrightError", (error) =>
+      Effect.log(`Playwright error: ${error.reason}`)
+    ),
+  );
+});
+```
+
+### retry
+
+Retry operations that fail:
+
+```typescript
+import { Schedule } from "effect";
+
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  // Retry up to 3 times with exponential backoff
+  yield* page.goto("https://example.com").pipe(
+    Effect.retry(Schedule.exponential("100 millis").pipe(
+      Schedule.compose(Schedule.recurs(3)),
+    )),
+  );
+});
+```
+
+### orElse
+
+Provide an alternative effect if the first fails:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  yield* page.goto("https://primary.com").pipe(
+    Effect.orElse(() => page.goto("https://backup.com")),
+  );
+});
+```
+
+## Error propagation
+
+Errors automatically propagate through effect chains:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  // If goto fails, none of the following code runs
+  yield* page.goto("https://example.com");
+  yield* page.locator("button").click();
+  const text = yield* page.locator("h1").textContent();
+  
+  return text;
+}).pipe(
+  Effect.scoped,
+  Effect.catchAll((error) =>
+    // This catches errors from any operation above
+    Effect.log(`Workflow failed: ${error.reason}`)
+  ),
+);
+```
+
+The first error stops execution and propagates to the nearest error handler.
+
+## Timeouts and Playwright's timeout option
+
+<Warning>
+Playwright does not support Effect interruption. This means `Effect.timeout` and similar interruption-based combinators will not cancel in-flight Playwright operations.
+</Warning>
+
+Instead, use Playwright's built-in timeout options:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  // Use Playwright's timeout option, not Effect.timeout
+  yield* page.goto("https://example.com", { 
+    timeout: 5000 // 5 seconds
+  });
+  
+  yield* page.locator("button").click({ 
+    timeout: 3000 // 3 seconds
+  });
+});
+```
+
+Playwright's timeout will throw a `TimeoutError`, which gets wrapped as `PlaywrightError` with `reason: "Timeout"`.
+
+## Accessing the original error
+
+The `cause` field contains the original Playwright error:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  yield* page.goto("https://example.com").pipe(
+    Effect.catchAll((error) =>
+      Effect.gen(function* () {
+        // Access the original Playwright error
+        yield* Effect.log(`Original error: ${error.cause}`);
+        
+        // You can inspect properties specific to Playwright errors
+        if (error.cause instanceof Error) {
+          yield* Effect.log(`Stack trace: ${error.cause.stack}`);
+        }
+      }),
+    ),
+  );
+});
+```
+
+## Error logging
+
+Effect's logging system integrates seamlessly with error handling:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+  
+  yield* page.goto("https://example.com").pipe(
+    Effect.tapError((error) =>
+      Effect.log(`Navigation error: ${error.reason}`)
+    ),
+  );
+}).pipe(
+  Effect.provide(Logger.pretty),
+);
+```
+
+## Best practices
+
+1. **Use Playwright's timeout options**: Don't rely on `Effect.timeout` for Playwright operations
+2. **Handle timeout errors specifically**: Timeouts often need different retry logic than other errors
+3. **Preserve error context**: When recovering from errors, log the original error for debugging
+4. **Let errors propagate**: Don't catch errors too early; handle them at the appropriate level
+5. **Use typed error handling**: Take advantage of Effect's type-safe error handling instead of try/catch
+6. **Inspect the cause**: When debugging, examine the `cause` field for Playwright-specific error details

@@ -1,0 +1,133 @@
+---
+title: Installation
+description: Install effect-playwright and configure peer dependencies for browser automation
+---
+
+# Installation
+
+Learn how to install effect-playwright and set up the required dependencies.
+
+## Install the package
+
+You can install effect-playwright using your preferred package manager:
+
+<CodeGroup>
+
+```bash npm
+npm install effect-playwright playwright-core
+```
+
+```bash yarn
+yarn add effect-playwright playwright-core
+```
+
+```bash pnpm
+pnpm add effect-playwright playwright-core
+```
+
+</CodeGroup>
+
+## Peer dependencies
+
+effect-playwright requires the following peer dependencies:
+
+- `effect` (^3.19.6)
+- `@effect/platform` (^0.93.3)
+
+Install them if you haven't already:
+
+<CodeGroup>
+
+```bash npm
+npm install effect @effect/platform
+```
+
+```bash yarn
+yarn add effect @effect/platform
+```
+
+```bash pnpm
+pnpm add effect @effect/platform
+```
+
+</CodeGroup>
+
+## Playwright vs playwright-core
+
+You have two options when installing Playwright:
+
+### Option 1: playwright-core (recommended)
+
+```bash
+pnpm add playwright-core
+```
+
+This installs the core Playwright library without automatically downloading browser binaries. You'll need to install browsers manually:
+
+```bash
+px playwright install chromium
+```
+
+<Tip>
+  Use `playwright-core` when you want control over browser installation or are deploying to environments with pre-installed browsers.
+</Tip>
+
+### Option 2: playwright
+
+```bash
+pnpm add playwright
+```
+
+This automatically downloads and installs browser binaries during the post-install step.
+
+<Warning>
+  The `playwright` package increases installation time and bundle size. Use `playwright-core` for production deployments.
+</Warning>
+
+## Browser installation
+
+If you're using `playwright-core`, install the browsers you need:
+
+```bash
+# Install all browsers
+px playwright install
+
+# Install specific browser
+px playwright install chromium
+px playwright install firefox
+px playwright install webkit
+```
+
+## Verify installation
+
+Create a simple script to verify your installation:
+
+```typescript test.ts
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  console.log("Installation successful!");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+await Effect.runPromise(program);
+```
+
+Run it to confirm everything is working:
+
+```bash
+ts-node test.ts
+```
+
+## Next steps
+
+Now that you have effect-playwright installed, continue to the quick start guide to build your first automation script.
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Build your first browser automation script with effect-playwright
+</Card>

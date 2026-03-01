@@ -1,0 +1,401 @@
+---
+title: CDP Connection
+description: Connect to existing browsers via Chrome DevTools Protocol with effect-playwright
+---
+
+The Chrome DevTools Protocol (CDP) allows you to connect to existing browser instances instead of launching new ones. This is useful for debugging, connecting to remote browsers, or working with browsers launched by other tools.
+
+## Understanding CDP
+
+CDP is a protocol that allows tools to instrument, inspect, debug, and profile Chromium-based browsers. When you connect via CDP:
+
+- You attach to an **existing** browser process
+- The browser continues running even after you disconnect
+- You can connect multiple clients to the same browser
+- Closing the CDP connection does **not** close the browser
+
+<Warning>
+CDP connections only work with Chromium-based browsers. Firefox and WebKit use different protocols.
+</Warning>
+
+## Basic CDP Connection
+
+### Using connectCDPScoped
+
+The recommended way to connect via CDP is using `connectCDPScoped`, which automatically manages the connection lifecycle:
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  // Connect to a browser running on localhost:9222
+  const browser = yield* playwright.connectCDPScoped("http://localhost:9222");
+  
+  // Use the browser
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  console.log(`Page title: ${yield* page.title}`);
+  
+  // Connection will be closed automatically when scope ends
+  // Note: The browser process itself continues running
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+await Effect.runPromise(program);
+```
+
+<Tip>
+The CDP connection is closed when the scope ends, but the browser process remains running. This is the key difference from `launchScoped`.
+</Tip>
+
+### Using connectCDP
+
+For manual connection management, use `connectCDP`:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  // Manually connect to CDP
+  const browser = yield* playwright.connectCDP("http://localhost:9222");
+  
+  // Use the browser
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  // You must manually close the connection
+  yield* browser.close;
+  
+  // Browser process continues running
+}).pipe(Effect.provide(Playwright.layer));
+```
+
+## Connection Lifecycle
+
+Understanding the difference between scoped and unscoped connections:
+
+<Tabs>
+  <Tab title="connectCDPScoped">
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      
+      // Connection managed by scope
+      const browser = yield* playwright.connectCDPScoped("http://localhost:9222");
+      
+      const page = yield* browser.newPage();
+      yield* page.goto("https://example.com");
+      
+      // Automatic cleanup:
+      // 1. CDP connection is closed
+      // 2. Browser process keeps running
+    }).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+    ```
+  </Tab>
+  <Tab title="connectCDP">
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      
+      // Manual connection management
+      const browser = yield* playwright.connectCDP("http://localhost:9222");
+      
+      const page = yield* browser.newPage();
+      yield* page.goto("https://example.com");
+      
+      // Must explicitly close connection
+      yield* browser.close;
+      
+      // Browser process keeps running
+    }).pipe(Effect.provide(Playwright.layer));
+    ```
+  </Tab>
+</Tabs>
+
+## CDP Connection Options
+
+Customize the CDP connection with options:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  const browser = yield* playwright.connectCDPScoped(
+    "http://localhost:9222",
+    {
+      timeout: 30000,        // Connection timeout in milliseconds
+      slowMo: 100,           // Slow down operations by 100ms
+      headers: {             // Custom headers for WebSocket connection
+        "X-Custom-Header": "value",
+      },
+    }
+  );
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Starting a CDP Server
+
+Before connecting via CDP, you need a browser with CDP enabled. Here are common ways to start one:
+
+<Steps>
+  <Step title="Launch Chrome with CDP">
+    Start Chrome from the command line with the `--remote-debugging-port` flag:
+    
+    ```bash
+    # macOS
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+    
+    # Linux
+    google-chrome --remote-debugging-port=9222
+    
+    # Windows
+    "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+    ```
+  </Step>
+  <Step title="Use Playwright's CDP endpoint">
+    Launch a browser with Playwright and get its CDP endpoint:
+    
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      const browser = yield* playwright.launchScoped(chromium, {
+        args: ['--remote-debugging-port=9222']
+      });
+      
+      // Get CDP endpoint
+      const cdpUrl = yield* browser.use((b) => 
+        Promise.resolve(b.wsEndpoint())
+      );
+      
+      console.log(`CDP URL: ${cdpUrl}`);
+    }).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+    ```
+  </Step>
+  <Step title="Use Docker">
+    Run a Chrome container with CDP enabled:
+    
+    ```bash
+    docker run -d -p 9222:9222 browserless/chrome
+    ```
+  </Step>
+</Steps>
+
+## Practical Use Cases
+
+### Connecting to a Remote Browser
+
+Connect to a browser running on a different machine:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  // Connect to remote browser
+  const browser = yield* playwright.connectCDPScoped(
+    "http://remote-host:9222"
+  );
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  // Take a screenshot
+  const screenshot = yield* page.use((p) => 
+    p.screenshot({ path: "remote-screenshot.png" })
+  );
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Debugging Existing Browser Sessions
+
+Attach to a browser that a user is already using:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  // Connect to existing Chrome instance
+  const browser = yield* playwright.connectCDPScoped(
+    "http://localhost:9222"
+  );
+  
+  // Get all open contexts (profiles)
+  const contexts = browser.contexts();
+  console.log(`Found ${contexts.length} browser contexts`);
+  
+  // Get pages from the first context
+  const context = contexts[0];
+  if (context) {
+    const pages = yield* context.pages;
+    console.log(`Found ${pages.length} open pages`);
+    
+    // Inspect the first page
+    if (pages.length > 0) {
+      const page = pages[0];
+      console.log(`Current URL: ${page.url()}`);
+      console.log(`Page title: ${yield* page.title}`);
+    }
+  }
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Working with Multiple Connections
+
+Connect multiple clients to the same browser:
+
+```typescript
+const cdpUrl = "http://localhost:9222";
+
+const connection1 = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDPScoped(cdpUrl);
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  yield* Effect.log("Connection 1 complete");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+const connection2 = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDPScoped(cdpUrl);
+  const page = yield* browser.newPage();
+  yield* page.goto("https://github.com");
+  yield* Effect.log("Connection 2 complete");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+// Run both connections in parallel
+const program = Effect.all([connection1, connection2], { concurrency: 2 });
+await Effect.runPromise(program);
+```
+
+### Browser Management Pattern
+
+Launch a browser once and connect to it multiple times:
+
+```typescript
+import { Effect, Layer } from "effect";
+import { Playwright } from "effect-playwright";
+import { chromium } from "playwright-core";
+
+// Launch a persistent browser with CDP enabled
+const startBrowser = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  const browser = yield* playwright.launch(chromium, {
+    headless: false,
+    args: ['--remote-debugging-port=9222'],
+  });
+  
+  // Get CDP endpoint
+  const cdpUrl = yield* browser.use((b) => Promise.resolve(b.wsEndpoint()));
+  
+  yield* Effect.log(`Browser started. CDP URL: ${cdpUrl}`);
+  
+  return { browser, cdpUrl };
+}).pipe(Effect.provide(Playwright.layer));
+
+// Connect to the browser for automation tasks
+const automationTask = (cdpUrl: string) =>
+  Effect.gen(function* () {
+    const playwright = yield* Playwright;
+    const browser = yield* playwright.connectCDPScoped(cdpUrl);
+    
+    const page = yield* browser.newPage();
+    yield* page.goto("https://example.com");
+    
+    const title = yield* page.title;
+    yield* Effect.log(`Page title: ${title}`);
+  }).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+// Full program
+const program = Effect.gen(function* () {
+  const { browser, cdpUrl } = yield* startBrowser;
+  
+  // Run multiple automation tasks
+  yield* automationTask(cdpUrl);
+  yield* automationTask(cdpUrl);
+  yield* automationTask(cdpUrl);
+  
+  // Clean up
+  yield* browser.close;
+});
+
+await Effect.runPromise(program);
+```
+
+## Monitoring Connection Status
+
+Check if the browser is still connected:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDPScoped("http://localhost:9222");
+  
+  console.log(`Connected: ${browser.isConnected()}`);
+  console.log(`Browser version: ${browser.version()}`);
+  
+  // Listen for disconnection
+  yield* browser.eventStream("disconnected").pipe(
+    Stream.runForEach((browser) =>
+      Effect.log("Browser disconnected!")
+    ),
+    Effect.fork
+  );
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  // Check again
+  console.log(`Still connected: ${browser.isConnected()}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Error Handling
+
+Handle common CDP connection errors:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  const result = yield* Effect.either(
+    playwright.connectCDPScoped("http://localhost:9222")
+  );
+  
+  if (result._tag === "Left") {
+    yield* Effect.log(`Connection failed: ${result.left.message}`);
+    yield* Effect.log("Make sure Chrome is running with CDP enabled");
+    yield* Effect.log("Example: chrome --remote-debugging-port=9222");
+    return;
+  }
+  
+  const browser = result.right;
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always use connectCDPScoped">
+    Prefer `connectCDPScoped` over `connectCDP` to ensure connections are properly cleaned up.
+  </Step>
+  <Step title="Handle connection failures gracefully">
+    CDP connections can fail if the browser isn't running or the port is wrong. Always handle errors.
+  </Step>
+  <Step title="Remember: Close !== Quit">
+    Closing a CDP connection does NOT close the browser. The browser process continues running.
+  </Step>
+  <Step title="Monitor disconnection events">
+    Listen to the `disconnected` event to detect when the browser closes or the connection drops.
+  </Step>
+  <Step title="Use CDP for debugging">
+    CDP is perfect for debugging existing browser sessions or connecting to remote browsers for testing.
+  </Step>
+</Steps>

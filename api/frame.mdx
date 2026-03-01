@@ -1,0 +1,277 @@
+---
+title: Frame
+description: Service for interacting with page frames
+---
+
+The `PlaywrightFrame` service provides methods for interacting with frames within a page.
+
+## Methods
+
+### goto
+
+Navigates the frame to the given URL.
+
+```typescript
+goto(
+  url: string,
+  options?: GotoOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="url" type="string" required>
+  The URL to navigate to
+</ParamField>
+
+<ParamField path="options" type="GotoOptions">
+  Optional navigation options
+</ParamField>
+
+**Returns:** Effect that completes when navigation is finished
+
+### waitForURL
+
+Waits for the frame to navigate to the given URL.
+
+```typescript
+waitForURL(
+  url: string | RegExp | ((url: URL) => boolean),
+  options?: WaitForURLOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="url" type="string | RegExp | function" required>
+  The URL to wait for
+</ParamField>
+
+<ParamField path="options" type="WaitForURLOptions">
+  Optional wait options
+</ParamField>
+
+**Returns:** Effect that completes when the URL matches
+
+### waitForLoadState
+
+Waits for the frame to reach the given load state.
+
+```typescript
+waitForLoadState(
+  state?: "load" | "domcontentloaded" | "networkidle",
+  options?: WaitForLoadStateOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="state" type="string">
+  The load state to wait for
+</ParamField>
+
+<ParamField path="options" type="WaitForLoadStateOptions">
+  Optional wait options
+</ParamField>
+
+**Returns:** Effect that completes when the load state is reached
+
+### evaluate
+
+Evaluates a function in the context of the frame.
+
+```typescript
+evaluate<R, Arg = void>(
+  pageFunction: PageFunction<Arg, R>,
+  arg?: Arg
+): Effect.Effect<R, PlaywrightError>
+```
+
+<ParamField path="pageFunction" type="function" required>
+  The function to evaluate in the frame context
+</ParamField>
+
+<ParamField path="arg" type="any">
+  Optional argument to pass to the function
+</ParamField>
+
+**Returns:** Effect that resolves to the function's return value
+
+### title
+
+Returns the frame title.
+
+```typescript
+title: Effect.Effect<string, PlaywrightError>
+```
+
+**Returns:** Effect that resolves to the frame title
+
+### url
+
+Returns the current URL of the frame.
+
+```typescript
+url(): string
+```
+
+**Returns:** The current frame URL
+
+### content
+
+Returns the full HTML contents of the frame, including the doctype.
+
+```typescript
+content: Effect.Effect<string, PlaywrightError>
+```
+
+**Returns:** Effect that resolves to the frame's HTML content
+
+### name
+
+Returns the frame name.
+
+```typescript
+name(): string
+```
+
+**Returns:** The frame name
+
+### locator
+
+Returns a locator for the given selector.
+
+NOTE: This method will cause a defect if `options.has` or `options.hasNot` are provided and belong to a different frame.
+
+```typescript
+locator(
+  selector: string,
+  options?: LocatorOptions
+): PlaywrightLocator.Service
+```
+
+<ParamField path="selector" type="string" required>
+  The CSS selector to locate
+</ParamField>
+
+<ParamField path="options" type="LocatorOptions">
+  Optional locator options
+</ParamField>
+
+**Returns:** PlaywrightLocator service
+
+### getByRole
+
+Returns a locator that matches the given role.
+
+```typescript
+getByRole(
+  role: AriaRole,
+  options?: GetByRoleOptions
+): PlaywrightLocator.Service
+```
+
+<ParamField path="role" type="AriaRole" required>
+  The ARIA role to match
+</ParamField>
+
+<ParamField path="options" type="GetByRoleOptions">
+  Optional options for matching the role
+</ParamField>
+
+**Returns:** PlaywrightLocator service
+
+### getByText
+
+Returns a locator that matches the given text.
+
+```typescript
+getByText(
+  text: string | RegExp,
+  options?: GetByTextOptions
+): PlaywrightLocator.Service
+```
+
+<ParamField path="text" type="string | RegExp" required>
+  The text to match
+</ParamField>
+
+<ParamField path="options" type="GetByTextOptions">
+  Optional options for text matching
+</ParamField>
+
+**Returns:** PlaywrightLocator service
+
+### getByLabel
+
+Returns a locator that matches the given label.
+
+```typescript
+getByLabel(
+  label: string | RegExp,
+  options?: GetByLabelOptions
+): PlaywrightLocator.Service
+```
+
+<ParamField path="label" type="string | RegExp" required>
+  The label text to match
+</ParamField>
+
+<ParamField path="options" type="GetByLabelOptions">
+  Optional options for label matching
+</ParamField>
+
+**Returns:** PlaywrightLocator service
+
+### getByTestId
+
+Returns a locator that matches the given test id.
+
+```typescript
+getByTestId(
+  testId: string
+): PlaywrightLocator.Service
+```
+
+<ParamField path="testId" type="string" required>
+  The test ID to match
+</ParamField>
+
+**Returns:** PlaywrightLocator service
+
+### use
+
+A generic utility to execute any promise-based method on the underlying Playwright `Frame`.
+
+Can be used to access any Frame functionality not directly exposed by this service.
+
+```typescript
+use<T>(
+  f: (frame: Frame) => Promise<T>
+): Effect.Effect<T, PlaywrightError>
+```
+
+<ParamField path="f" type="function" required>
+  A function that takes the Playwright `Frame` and returns a `Promise`
+</ParamField>
+
+**Returns:** Effect that wraps the promise and returns its result
+
+### click (deprecated)
+
+<Warning>
+This method is deprecated. Use `locator` to create a locator and then call `click` on it instead.
+</Warning>
+
+Clicks an element matching the given selector.
+
+```typescript
+click(
+  selector: string,
+  options?: ClickOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="selector" type="string" required>
+  The CSS selector to click
+</ParamField>
+
+<ParamField path="options" type="ClickOptions">
+  Optional click options
+</ParamField>
+
+**Returns:** Effect that completes when the element is clicked

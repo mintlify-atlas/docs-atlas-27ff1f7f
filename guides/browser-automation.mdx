@@ -1,0 +1,333 @@
+---
+title: Browser Automation
+description: Learn how to launch browsers, manage contexts and pages, and handle lifecycles with effect-playwright
+---
+
+This guide covers the fundamentals of browser automation with effect-playwright, including launching browsers, creating contexts and pages, and managing their lifecycles effectively.
+
+## Launching Browsers
+
+The `Playwright` service provides methods to launch different browser types (Chromium, Firefox, WebKit) with automatic lifecycle management.
+
+### Basic Browser Launch
+
+Use `launchScoped` for automatic browser cleanup when the scope ends:
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Browser will be closed automatically when this scope ends
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  console.log(`Page title: ${page.title()}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+await Effect.runPromise(program);
+```
+
+### Manual Browser Management
+
+If you need manual control over the browser lifecycle, use `launch` instead:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launch(chromium);
+  
+  // Use the browser...
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  // You must close it manually
+  yield* browser.close;
+}).pipe(Effect.provide(Playwright.layer));
+```
+
+<Warning>
+Always prefer `launchScoped` over `launch` to prevent resource leaks. Manual management is error-prone.
+</Warning>
+
+### Launch Options
+
+Customize browser behavior with launch options:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  const browser = yield* playwright.launchScoped(chromium, {
+    headless: false,  // Run with visible UI
+    slowMo: 100,      // Slow down operations by 100ms
+    args: ['--start-maximized'],
+    timeout: 30000,   // Launch timeout in milliseconds
+  });
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Browser Contexts
+
+<Tip>
+Browser contexts are isolated environments within a browser, similar to incognito profiles. They don't share cookies, cache, or storage.
+</Tip>
+
+### Creating New Contexts
+
+Create isolated browser contexts with custom options:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Create a context with custom viewport and user agent
+  const context = yield* browser.newContext({
+    viewport: { width: 1920, height: 1080 },
+    userAgent: 'Mozilla/5.0 (Custom User Agent)',
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+  });
+  
+  const page = yield* context.newPage();
+  yield* page.goto("https://example.com");
+  
+  yield* context.close;
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Persistent Contexts
+
+Use persistent contexts to save browser state (cookies, localStorage, etc.) across sessions:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  // Launch with persistent profile
+  const context = yield* playwright.launchPersistentContextScoped(
+    chromium,
+    "./.playwright-profile",  // Profile directory
+    {
+      headless: false,
+      viewport: { width: 1280, height: 720 },
+    }
+  );
+  
+  const page = yield* context.newPage();
+  yield* page.goto("https://example.com");
+  
+  // State persists to ./.playwright-profile
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+<Warning>
+Closing a persistent context also closes the underlying browser process.
+</Warning>
+
+### Manual Persistent Context Management
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  
+  const context = yield* playwright.launchPersistentContext(
+    chromium,
+    "./.playwright-profile"
+  );
+  
+  const page = yield* context.newPage();
+  yield* page.goto("https://example.com");
+  
+  // Must close manually
+  yield* context.close;
+}).pipe(Effect.provide(Playwright.layer));
+```
+
+## Working with Pages
+
+### Creating Pages
+
+Pages can be created directly from a browser or from a context:
+
+<Tabs>
+  <Tab title="From Browser">
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      const browser = yield* playwright.launchScoped(chromium);
+      
+      // Creates a page in a new default context
+      const page = yield* browser.newPage();
+      yield* page.goto("https://example.com");
+    }).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+    ```
+  </Tab>
+  <Tab title="From Context">
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      const browser = yield* playwright.launchScoped(chromium);
+      const context = yield* browser.newContext();
+      
+      // Creates a page in the specified context
+      const page = yield* context.newPage();
+      yield* page.goto("https://example.com");
+    }).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+    ```
+  </Tab>
+</Tabs>
+
+### Multiple Pages
+
+Work with multiple pages simultaneously:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Create multiple pages
+  const page1 = yield* browser.newPage();
+  const page2 = yield* browser.newPage();
+  const page3 = yield* browser.newPage();
+  
+  // Navigate them independently
+  yield* page1.goto("https://example.com");
+  yield* page2.goto("https://github.com");
+  yield* page3.goto("https://google.com");
+  
+  console.log(`Page 1: ${page1.url()}`);
+  console.log(`Page 2: ${page2.url()}`);
+  console.log(`Page 3: ${page3.url()}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Lifecycle Management
+
+### Understanding Scoped Resources
+
+Effect's `Scope` automatically manages resource cleanup:
+
+<Steps>
+  <Step title="Resources are acquired">
+    When you use `launchScoped`, `newContext`, or similar scoped methods, resources are acquired.
+  </Step>
+  <Step title="Resources are used">
+    You can use the browser, context, or page within the scope.
+  </Step>
+  <Step title="Resources are released">
+    When the scope ends (normally or due to an error), all resources are automatically cleaned up in reverse order.
+  </Step>
+</Steps>
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  // Browser acquired
+  
+  const context = yield* browser.newContext();
+  // Context acquired
+  
+  const page = yield* context.newPage();
+  // Page acquired
+  
+  yield* page.goto("https://example.com");
+  
+  // Even if an error occurs here, cleanup happens automatically:
+  // 1. Context is closed
+  // 2. Browser is closed
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Manual Cleanup with Finalizers
+
+Add custom cleanup logic using finalizers:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launch(chromium);
+  
+  // Add a finalizer to ensure cleanup
+  yield* Effect.addFinalizer(() => 
+    browser.close.pipe(Effect.ignoreLogged)
+  );
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Browser Information
+
+Access browser metadata:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  console.log(`Browser version: ${browser.version()}`);
+  console.log(`Connected: ${browser.isConnected()}`);
+  console.log(`Browser type: ${browser.browserType().name()}`);
+  
+  // Get all open contexts
+  const contexts = browser.contexts();
+  console.log(`Open contexts: ${contexts.length}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Event Handling
+
+Listen to browser-level events:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Listen for disconnection events
+  yield* browser.eventStream("disconnected").pipe(
+    Stream.runForEach((browser) =>
+      Effect.gen(function* () {
+        yield* Effect.log("Browser disconnected!");
+      })
+    ),
+    Effect.fork  // Run in background
+  );
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+<Tip>
+Always fork event streams so they run in the background without blocking your main program flow.
+</Tip>
+
+## Accessing Native Playwright
+
+Access the underlying Playwright browser object for advanced use cases:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Use native Playwright API
+  const contexts = yield* browser.use((b) => 
+    Promise.resolve(b.contexts())
+  );
+  
+  console.log(`Number of contexts: ${contexts.length}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```

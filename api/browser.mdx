@@ -1,0 +1,142 @@
+---
+title: Browser
+description: Service for managing browser instances
+---
+
+The `PlaywrightBrowser` service provides methods for managing browser instances, creating pages and contexts.
+
+## Methods
+
+### newPage
+
+Opens a new page in the browser.
+
+```typescript
+newPage(
+  options?: NewPageOptions
+): Effect.Effect<PlaywrightPage.Service, PlaywrightError>
+```
+
+<ParamField path="options" type="NewPageOptions">
+  Optional options for creating the new page
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightPage service
+
+**Example:**
+
+```typescript
+const page = yield* browser.newPage();
+```
+
+### newContext
+
+Creates a new browser context with automatic cleanup.
+
+```typescript
+newContext(
+  options?: NewContextOptions
+): Effect.Effect<PlaywrightBrowserContext.Service, PlaywrightError, Scope>
+```
+
+<ParamField path="options" type="NewContextOptions">
+  Optional options for creating the new context
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowserContext service with Scope requirement
+
+### close
+
+Closes the browser and all of its pages.
+
+```typescript
+close: Effect.Effect<void, PlaywrightError>
+```
+
+**Returns:** Effect that completes when the browser is closed
+
+### contexts
+
+Returns the list of all open browser contexts.
+
+```typescript
+contexts(): Array<PlaywrightBrowserContext.Service>
+```
+
+**Returns:** Array of PlaywrightBrowserContext services
+
+### browserType
+
+Returns the browser type (chromium, firefox or webkit) that the browser belongs to.
+
+```typescript
+browserType(): BrowserType
+```
+
+**Returns:** The browser type
+
+### version
+
+Returns the version of the browser.
+
+```typescript
+version(): string
+```
+
+**Returns:** Browser version string
+
+### isConnected
+
+Returns whether the browser is connected.
+
+```typescript
+isConnected(): boolean
+```
+
+**Returns:** `true` if the browser is connected, `false` otherwise
+
+### eventStream
+
+Creates a stream of the given event from the browser.
+
+```typescript
+eventStream<K extends "disconnected">(
+  event: K
+): Stream.Stream<PlaywrightBrowser.Service>
+```
+
+<ParamField path="event" type="string" required>
+  The event name (currently only "disconnected" is supported)
+</ParamField>
+
+**Returns:** Stream of browser events
+
+**Example:**
+
+```typescript
+const disconnectedStream = browser.eventStream("disconnected");
+```
+
+### use
+
+A generic utility to execute any promise-based method on the underlying Playwright `Browser`.
+
+Can be used to access any Browser functionality not directly exposed by this service.
+
+```typescript
+use<T>(
+  f: (browser: Browser) => Promise<T>
+): Effect.Effect<T, PlaywrightError>
+```
+
+<ParamField path="f" type="function" required>
+  A function that takes the Playwright `Browser` and returns a `Promise`
+</ParamField>
+
+**Returns:** Effect that wraps the promise and returns its result
+
+**Example:**
+
+```typescript
+const contexts = yield* browser.use((b) => b.contexts());
+```

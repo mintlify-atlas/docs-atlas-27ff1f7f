@@ -1,0 +1,159 @@
+---
+title: Resource management
+description: Learn how effect-playwright uses Effect's Scope for automatic resource cleanup
+---
+
+Effect-playwright leverages Effect's resource management system to automatically handle browser and page lifecycles. This ensures that resources are properly cleaned up even when errors occur or effects are interrupted.
+
+## Effect Scope basics
+
+In Effect, a `Scope` represents a lifetime during which resources can be acquired and automatically released. When you create a scoped resource, Effect guarantees that cleanup will happen when the scope ends, regardless of whether the effect succeeds, fails, or is interrupted.
+
+This pattern eliminates common bugs like:
+- Forgetting to close browsers or pages
+- Resource leaks when errors occur
+- Cleanup code that never runs due to early returns
+
+## Using launchScoped
+
+The recommended way to launch a browser is with `launchScoped`. This method returns an effect that requires a `Scope`, and the browser will automatically close when that scope ends.
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  yield* page.goto("https://example.com");
+  console.log(`Page title: ${page.title()}`);
+  
+  // Browser closes automatically when this scope ends
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+await Effect.runPromise(program);
+```
+
+The `Effect.scoped` combinator creates a new scope for the effect. When the effect completes (successfully or with an error), Effect automatically calls the cleanup logic, which closes the browser.
+
+## Manual lifecycle management
+
+If you need more control, you can use `launch` or `connectCDP` for manual lifecycle management:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDP("http://localhost:9222");
+
+  // ... use browser ...
+
+  // You must manually close the connection
+  yield* browser.close;
+});
+```
+
+However, this approach is more error-prone because you're responsible for cleanup. If an error occurs before `browser.close` executes, the connection will leak.
+
+## CDP connections and scope
+
+When connecting to an existing browser via Chrome DevTools Protocol (CDP), `connectCDPScoped` only closes the *connection*, not the browser process itself:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+
+  // Connection closes automatically, but browser process continues running
+  const browser = yield* playwright.connectCDPScoped("http://localhost:9222");
+
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped);
+```
+
+This is useful when you want to connect to a long-running browser instance (like a Docker container) without shutting it down.
+
+## PlaywrightEnvironment for reusable configuration
+
+`PlaywrightEnvironment` is an experimental service that simplifies browser configuration by allowing you to set launch options once and reuse them throughout your application.
+
+### Creating an environment
+
+Define your browser type and launch options in a layer:
+
+```typescript
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium } from "playwright-core";
+
+const liveLayer = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+  args: ["--disable-blink-features=AutomationControlled"],
+});
+```
+
+### Using withBrowser
+
+The `withBrowser` utility provides the `PlaywrightBrowser` service with automatic lifecycle management:
+
+```typescript
+const program = Effect.gen(function* () {
+  // Browser is automatically available in context
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+
+  yield* page.goto("https://example.com");
+  
+  // Browser closes automatically when this effect completes
+}).pipe(PlaywrightEnvironment.withBrowser);
+
+await Effect.runPromise(program.pipe(Effect.provide(liveLayer)));
+```
+
+`withBrowser` internally manages a `Scope`, so the browser launches when the effect starts and closes when it finishes, even on failure or interruption.
+
+## Resource hierarchy
+
+Effect-playwright maintains a resource hierarchy that mirrors Playwright's structure:
+
+- **Browser**: Top-level resource, closed via scope or manually
+- **BrowserContext**: Created with `browser.newContext()`, returns a scoped effect
+- **Page**: Created with `browser.newPage()` or `context.newPage()`
+
+Each level can be managed with Effect's scope system:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  
+  // Context is scoped and will close automatically
+  const context = yield* browser.newContext();
+  const page = yield* context.newPage();
+  
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped);
+```
+
+<Note>
+The `newContext` method from `browser.ts:132-137` uses `Effect.acquireRelease` to ensure contexts are properly cleaned up:
+
+```typescript
+newContext: (options) =>
+  Effect.acquireRelease(
+    use((browser) =>
+      browser.newContext(options).then(PlaywrightBrowserContext.make),
+    ),
+    (context) => context.close.pipe(Effect.ignoreLogged),
+  ),
+```
+</Note>
+
+## Best practices
+
+1. **Prefer scoped methods**: Use `launchScoped` and `connectCDPScoped` over manual management
+2. **Use Effect.scoped**: Always wrap your effect pipeline with `Effect.scoped` when using scoped resources
+3. **Let Effect handle cleanup**: Don't manually close browsers when using scoped methods
+4. **Use PlaywrightEnvironment for consistency**: When you need the same browser configuration across multiple operations
+5. **Understand CDP behavior**: Remember that `connectCDPScoped` only closes the connection, not the browser

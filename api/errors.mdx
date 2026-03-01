@@ -1,0 +1,153 @@
+---
+title: Error handling
+description: Error types and error handling patterns in effect-playwright
+---
+
+effect-playwright provides typed error handling through Effect, wrapping Playwright errors in a structured format.
+
+## PlaywrightError
+
+The main error type returned when Playwright operations fail. Extends `Data.TaggedError` from Effect.
+
+<ResponseField name="reason" type="PlaywrightErrorReason">
+  The reason for the error. Can be either `"Timeout"` or `"Unknown"`.
+</ResponseField>
+
+<ResponseField name="cause" type="unknown">
+  The original error object that caused this error.
+</ResponseField>
+
+## PlaywrightErrorReason
+
+A discriminated union type representing the category of error:
+
+- `"Timeout"` - The operation exceeded its timeout limit
+- `"Unknown"` - All other Playwright errors
+
+Playwright does not provide detailed error information, but there is a distinction between timeout errors and other errors. This type helps you handle these cases differently.
+
+## Error handling patterns
+
+### Basic error handling
+
+All potentially failing operations return `Effect.Effect<T, PlaywrightError>`, allowing you to handle errors using Effect's combinators:
+
+```typescript
+import { Effect } from "effect";
+import { PlaywrightBrowser } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  
+  // Navigate with error handling
+  const result = yield* page.goto("https://example.com").pipe(
+    Effect.catchTag("PlaywrightError", (error) => {
+      if (error.reason === "Timeout") {
+        console.error("Navigation timed out");
+      } else {
+        console.error("Navigation failed:", error.cause);
+      }
+      return Effect.succeed(null);
+    })
+  );
+});
+```
+
+### Handling timeout errors specifically
+
+You can pattern match on the error reason to handle timeouts differently:
+
+```typescript
+import { Effect, Match } from "effect";
+import { PlaywrightBrowser } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  
+  const result = yield* page.waitForSelector(".my-element").pipe(
+    Effect.catchTag("PlaywrightError", (error) =>
+      Match.value(error.reason).pipe(
+        Match.when("Timeout", () => {
+          console.log("Element not found within timeout period");
+          return Effect.succeed(null);
+        }),
+        Match.when("Unknown", () => {
+          console.error("Unexpected error:", error.cause);
+          return Effect.fail(error);
+        }),
+        Match.exhaustive
+      )
+    )
+  );
+});
+```
+
+### Retrying on timeout
+
+Use Effect's retry utilities to automatically retry on timeout errors:
+
+```typescript
+import { Effect, Schedule } from "effect";
+import { PlaywrightBrowser } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  
+  // Retry up to 3 times with exponential backoff on timeout
+  const result = yield* page.goto("https://example.com").pipe(
+    Effect.retry(
+      Schedule.exponential("100 millis").pipe(
+        Schedule.compose(Schedule.recurs(3)),
+        Schedule.whileInput((error) => 
+          error._tag === "PlaywrightError" && error.reason === "Timeout"
+        )
+      )
+    )
+  );
+});
+```
+
+### Fallback values
+
+Provide fallback values when operations fail:
+
+```typescript
+import { Effect } from "effect";
+import { PlaywrightBrowser } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  
+  // Provide a default value if the operation fails
+  const title = yield* page.title().pipe(
+    Effect.catchAll(() => Effect.succeed("Unknown Title"))
+  );
+});
+```
+
+### Logging errors
+
+Use Effect's logging capabilities to track errors:
+
+```typescript
+import { Effect } from "effect";
+import { PlaywrightBrowser } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com").pipe(
+    Effect.tapError((error) => 
+      Effect.logError("Navigation failed", { 
+        reason: error.reason,
+        cause: error.cause 
+      })
+    )
+  );
+});
+```

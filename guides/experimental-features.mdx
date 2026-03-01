@@ -1,0 +1,480 @@
+---
+title: Experimental Features
+description: Explore experimental APIs including PlaywrightEnvironment and BrowserUtils
+---
+
+The `effect-playwright/experimental` module provides experimental features that simplify common patterns and workflows. These APIs may change in future versions.
+
+<Warning>
+Experimental features are subject to change. Use them with caution in production environments.
+</Warning>
+
+## Importing Experimental Features
+
+Import experimental features from the dedicated module:
+
+```typescript
+import { PlaywrightEnvironment, BrowserUtils } from "effect-playwright/experimental";
+import { PlaywrightBrowser } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+```
+
+## PlaywrightEnvironment
+
+The `PlaywrightEnvironment` service simplifies browser setup by allowing you to configure the browser type and launch options once and reuse them across your application.
+
+### Why Use PlaywrightEnvironment?
+
+Without `PlaywrightEnvironment`, you need to pass the browser type and options every time:
+
+```typescript
+// Without PlaywrightEnvironment (repetitive)
+const task1 = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium, { headless: false });
+  // ...
+}).pipe(Effect.scoped);
+
+const task2 = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium, { headless: false });
+  // ...
+}).pipe(Effect.scoped);
+```
+
+With `PlaywrightEnvironment`, configure once and reuse:
+
+```typescript
+// With PlaywrightEnvironment (DRY)
+const env = PlaywrightEnvironment.layer(chromium, { headless: false });
+
+const task1 = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  // ...
+}).pipe(PlaywrightEnvironment.withBrowser);
+
+const task2 = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  // ...
+}).pipe(PlaywrightEnvironment.withBrowser);
+
+const program = Effect.all([task1, task2]).pipe(Effect.provide(env));
+```
+
+### Creating an Environment Layer
+
+Create a reusable environment layer with your browser configuration:
+
+```typescript
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium } from "playwright-core";
+
+// Create environment with default options
+const defaultEnv = PlaywrightEnvironment.layer(chromium);
+
+// Create environment with custom options
+const customEnv = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+  slowMo: 100,
+  args: ['--start-maximized'],
+  timeout: 30000,
+});
+
+// Use Firefox instead
+const firefoxEnv = PlaywrightEnvironment.layer(firefox, {
+  headless: true,
+});
+```
+
+### Using withBrowser
+
+The `withBrowser` utility provides the `PlaywrightBrowser` service to your effect and manages the browser lifecycle automatically:
+
+```typescript
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const liveLayer = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+});
+
+const program = Effect.gen(function* () {
+  // Browser is automatically available via PlaywrightBrowser service
+  const browser = yield* PlaywrightBrowser;
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+  
+  const title = yield* page.title;
+  yield* Effect.log(`Page title: ${title}`);
+  
+  // Browser automatically closes when this effect completes
+}).pipe(PlaywrightEnvironment.withBrowser);
+
+await Effect.runPromise(program.pipe(Effect.provide(liveLayer)));
+```
+
+<Steps>
+  <Step title="Create the environment layer">
+    Configure your browser type and launch options once using `PlaywrightEnvironment.layer`.
+  </Step>
+  <Step title="Write your automation logic">
+    Access the browser via `PlaywrightBrowser` service in your effects.
+  </Step>
+  <Step title="Wrap with withBrowser">
+    Use `PlaywrightEnvironment.withBrowser` to provide the browser service.
+  </Step>
+  <Step title="Provide the environment layer">
+    Provide the environment layer when running your program.
+  </Step>
+</Steps>
+
+### Complete Example
+
+Here's a complete example showing multiple tasks with shared configuration:
+
+```typescript
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+// Define the environment
+const liveLayer = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+});
+
+// Task 1: Get page title
+const getTitle = (url: string) =>
+  Effect.gen(function* () {
+    const browser = yield* PlaywrightBrowser;
+    const page = yield* browser.newPage();
+    
+    yield* page.goto(url);
+    const title = yield* page.title;
+    
+    yield* page.close;
+    return title;
+  }).pipe(PlaywrightEnvironment.withBrowser);
+
+// Task 2: Take screenshot
+const takeScreenshot = (url: string, path: string) =>
+  Effect.gen(function* () {
+    const browser = yield* PlaywrightBrowser;
+    const page = yield* browser.newPage();
+    
+    yield* page.goto(url);
+    yield* page.use((p) => p.screenshot({ path }));
+    
+    yield* page.close;
+  }).pipe(PlaywrightEnvironment.withBrowser);
+
+// Task 3: Extract data
+const extractData = (url: string) =>
+  Effect.gen(function* () {
+    const browser = yield* PlaywrightBrowser;
+    const page = yield* browser.newPage();
+    
+    yield* page.goto(url);
+    
+    const data = yield* page.evaluate(() => ({
+      title: document.title,
+      url: window.location.href,
+      bodyText: document.body.innerText.substring(0, 100),
+    }));
+    
+    yield* page.close;
+    return data;
+  }).pipe(PlaywrightEnvironment.withBrowser);
+
+// Compose tasks
+const program = Effect.gen(function* () {
+  const title = yield* getTitle("https://example.com");
+  yield* Effect.log(`Title: ${title}`);
+  
+  yield* takeScreenshot("https://example.com", "screenshot.png");
+  yield* Effect.log("Screenshot saved");
+  
+  const data = yield* extractData("https://example.com");
+  yield* Effect.log(`Extracted: ${JSON.stringify(data, null, 2)}`);
+}).pipe(Effect.provide(liveLayer));
+
+await Effect.runPromise(program);
+```
+
+### Benefits of PlaywrightEnvironment
+
+1. **DRY (Don't Repeat Yourself)**: Configure browser settings once
+2. **Automatic Lifecycle Management**: Browser is launched and closed automatically
+3. **Easy Testing**: Switch environments easily for different test scenarios
+4. **Type Safety**: Full TypeScript support with Effect's type system
+
+### Accessing the Browser Directly
+
+You can also access the browser effect directly from the environment:
+
+```typescript
+const program = Effect.gen(function* () {
+  const env = yield* PlaywrightEnvironment;
+  
+  // Get the browser effect
+  const browser = yield* env.browser;
+  
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(
+  Effect.scoped,
+  Effect.provide(PlaywrightEnvironment.layer(chromium))
+);
+```
+
+## BrowserUtils
+
+The `BrowserUtils` module provides utility functions for common browser operations.
+
+<Tip>
+As of the current version, `BrowserUtils` is exported but may contain additional utilities in future releases. Check the source code for the latest utilities.
+</Tip>
+
+### Importing BrowserUtils
+
+```typescript
+import { BrowserUtils } from "effect-playwright/experimental";
+```
+
+## Practical Patterns
+
+### Multiple Environments
+
+Create different environments for different scenarios:
+
+```typescript
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium, firefox } from "playwright-core";
+
+// Development environment (visible browser)
+const devEnv = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+  slowMo: 100,
+});
+
+// Production environment (headless)
+const prodEnv = PlaywrightEnvironment.layer(chromium, {
+  headless: true,
+});
+
+// Testing environment (Firefox)
+const testEnv = PlaywrightEnvironment.layer(firefox, {
+  headless: true,
+});
+
+// Use based on NODE_ENV
+const env = process.env.NODE_ENV === "production" ? prodEnv : devEnv;
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(
+  PlaywrightEnvironment.withBrowser,
+  Effect.provide(env)
+);
+```
+
+### Testing with Different Browsers
+
+```typescript
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium, firefox, webkit } from "playwright-core";
+import { Effect } from "effect";
+
+const testInBrowser = (browserName: string, browserType: BrowserType) =>
+  Effect.gen(function* () {
+    const browser = yield* PlaywrightBrowser;
+    const page = yield* browser.newPage();
+    
+    yield* page.goto("https://example.com");
+    const title = yield* page.title;
+    
+    yield* Effect.log(`${browserName} - Title: ${title}`);
+  }).pipe(
+    PlaywrightEnvironment.withBrowser,
+    Effect.provide(PlaywrightEnvironment.layer(browserType))
+  );
+
+// Test in all browsers
+const program = Effect.all([
+  testInBrowser("Chromium", chromium),
+  testInBrowser("Firefox", firefox),
+  testInBrowser("WebKit", webkit),
+]);
+
+await Effect.runPromise(program);
+```
+
+### Reusable Browser Configuration
+
+Create a configuration module:
+
+```typescript
+// config/browser.ts
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium } from "playwright-core";
+import { Layer } from "effect";
+
+export const BrowserConfig = {
+  development: PlaywrightEnvironment.layer(chromium, {
+    headless: false,
+    slowMo: 50,
+    args: ['--start-maximized'],
+  }),
+  
+  production: PlaywrightEnvironment.layer(chromium, {
+    headless: true,
+    args: ['--disable-dev-shm-usage', '--no-sandbox'],
+  }),
+  
+  testing: PlaywrightEnvironment.layer(chromium, {
+    headless: true,
+  }),
+};
+
+export const getCurrentEnv = () => {
+  const env = process.env.NODE_ENV || "development";
+  return BrowserConfig[env as keyof typeof BrowserConfig] || BrowserConfig.development;
+};
+```
+
+```typescript
+// app.ts
+import { BrowserConfig, getCurrentEnv } from "./config/browser";
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+}).pipe(
+  PlaywrightEnvironment.withBrowser,
+  Effect.provide(getCurrentEnv())
+);
+```
+
+### Parallel Browser Tasks
+
+Run multiple browser tasks in parallel with shared configuration:
+
+```typescript
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const env = PlaywrightEnvironment.layer(chromium);
+
+const scrapeURL = (url: string) =>
+  Effect.gen(function* () {
+    const browser = yield* PlaywrightBrowser;
+    const page = yield* browser.newPage();
+    
+    yield* page.goto(url);
+    const title = yield* page.title;
+    
+    yield* page.close;
+    return { url, title };
+  }).pipe(PlaywrightEnvironment.withBrowser);
+
+const urls = [
+  "https://example.com",
+  "https://github.com",
+  "https://google.com",
+];
+
+const program = Effect.all(
+  urls.map(scrapeURL),
+  { concurrency: 3 }
+).pipe(
+  Effect.map((results) => {
+    results.forEach(({ url, title }) => {
+      console.log(`${url}: ${title}`);
+    });
+  }),
+  Effect.provide(env)
+);
+
+await Effect.runPromise(program);
+```
+
+## Migration Guide
+
+If you're using the standard `Playwright` service, migrating to `PlaywrightEnvironment` is straightforward:
+
+<Tabs>
+  <Tab title="Before (Standard)">
+    ```typescript
+    import { Playwright } from "effect-playwright";
+    import { Effect } from "effect";
+    import { chromium } from "playwright-core";
+    
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      const browser = yield* playwright.launchScoped(chromium, {
+        headless: false,
+      });
+      
+      const page = yield* browser.newPage();
+      yield* page.goto("https://example.com");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Playwright.layer)
+    );
+    ```
+  </Tab>
+  <Tab title="After (Environment)">
+    ```typescript
+    import { PlaywrightBrowser } from "effect-playwright";
+    import { PlaywrightEnvironment } from "effect-playwright/experimental";
+    import { Effect } from "effect";
+    import { chromium } from "playwright-core";
+    
+    const env = PlaywrightEnvironment.layer(chromium, {
+      headless: false,
+    });
+    
+    const program = Effect.gen(function* () {
+      const browser = yield* PlaywrightBrowser;
+      
+      const page = yield* browser.newPage();
+      yield* page.goto("https://example.com");
+    }).pipe(
+      PlaywrightEnvironment.withBrowser,
+      Effect.provide(env)
+    );
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<Steps>
+  <Step title="Use PlaywrightEnvironment for consistency">
+    When you have multiple automation tasks that use the same browser configuration, use `PlaywrightEnvironment` to avoid repetition.
+  </Step>
+  <Step title="Create environment configurations">
+    Define separate environment layers for development, testing, and production.
+  </Step>
+  <Step title="Always use withBrowser">
+    Use `PlaywrightEnvironment.withBrowser` to ensure proper browser lifecycle management.
+  </Step>
+  <Step title="Close pages explicitly">
+    Even though browsers are managed automatically, close pages explicitly to free resources earlier.
+  </Step>
+  <Step title="Monitor experimental changes">
+    Keep an eye on release notes as experimental features may change between versions.
+  </Step>
+</Steps>

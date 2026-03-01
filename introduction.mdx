@@ -1,0 +1,68 @@
+---
+title: Introduction to effect-playwright
+description: A Playwright wrapper for the Effect ecosystem that brings functional programming and structured concurrency to browser automation
+---
+
+# Introduction to effect-playwright
+
+A Playwright wrapper for the Effect ecosystem that provides a set of services and layers to interact with Playwright in a type-safe way using Effect.
+
+<Note>
+  This library is currently focused on using Playwright for **automation** and **scraping**. It does not provide a wrapper for `@playwright/test` (the test runner).
+</Note>
+
+## What is effect-playwright?
+
+effect-playwright brings the power of functional programming and structured concurrency to browser automation. It wraps Playwright's API with Effect, providing enhanced type safety, automatic resource management, and functional error handling.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Effect integration" icon="layer-group">
+    Seamlessly integrates Playwright's API with the Effect ecosystem for functional programming patterns
+  </Card>
+  
+  <Card title="Resource management" icon="shield-check">
+    Automatic cleanup of browsers and contexts using Effect's Scope prevents resource leaks
+  </Card>
+  
+  <Card title="Type safety" icon="check">
+    Enhanced type safety and functional error handling with typed PlaywrightError
+  </Card>
+  
+  <Card title="Event streams" icon="stream">
+    Handle Playwright events as typed Effect Streams for reactive programming
+  </Card>
+</CardGroup>
+
+## Use cases
+
+effect-playwright is ideal for:
+
+- **Web scraping**: Extract data from websites with automatic resource cleanup
+- **Browser automation**: Automate repetitive tasks with type-safe operations
+- **Testing workflows**: Build reliable test automation with functional composition
+- **Data collection**: Gather information from web sources efficiently
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install effect-playwright and its peer dependencies
+  </Card>
+  
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get up and running with your first browser automation script
+  </Card>
+</CardGroup>
+
+## Why Effect?
+
+Effect provides:
+
+- **Structured concurrency**: Manage concurrent operations safely
+- **Automatic cleanup**: Resources are freed automatically when scopes end
+- **Composable error handling**: Handle errors functionally without try-catch
+- **Type-safe pipelines**: Chain operations with full type inference
+
+By combining Playwright with Effect, you get robust browser automation with the benefits of functional programming.

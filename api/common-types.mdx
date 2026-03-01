@@ -1,0 +1,266 @@
+---
+title: Common types
+description: Common types and utilities used in effect-playwright
+---
+
+Common types and utilities that wrap Playwright's core types with Effect-based APIs.
+
+## PlaywrightRequest
+
+Wraps Playwright's `Request` object with Effect-based methods for handling HTTP requests.
+
+<ResponseField name="allHeaders" type="Effect.Effect<Record<string, string>, PlaywrightError>">
+  An object with all the request HTTP headers associated with this request. The header names are lower-cased.
+</ResponseField>
+
+<ResponseField name="failure" type="() => Option.Option<{ errorText: string }>">
+  The method returns null unless this request was a failed one.
+</ResponseField>
+
+<ResponseField name="frame" type="Effect.Effect<PlaywrightFrameService>">
+  Returns the Frame that initiated this request.
+</ResponseField>
+
+<ResponseField name="headerValue" type="(name: string) => Effect.Effect<Option.Option<string>, PlaywrightError>">
+  Returns the value of the header matching the name. The name is case insensitive.
+</ResponseField>
+
+<ResponseField name="headers" type="() => Record<string, string>">
+  An object with the request HTTP headers. The header names are lower-cased.
+</ResponseField>
+
+<ResponseField name="headersArray" type="Effect.Effect<Array<{ name: string; value: string }>, PlaywrightError>">
+  An array with all the request HTTP headers associated with this request.
+</ResponseField>
+
+<ResponseField name="isNavigationRequest" type="() => boolean">
+  Whether this request is driving frame's navigation.
+</ResponseField>
+
+<ResponseField name="method" type="() => string">
+  Request's method (GET, POST, etc.)
+</ResponseField>
+
+<ResponseField name="postData" type="() => Option.Option<string>">
+  Request's post body, if any.
+</ResponseField>
+
+<ResponseField name="postDataBuffer" type="() => Option.Option<Buffer>">
+  Request's post body in a binary form, if any.
+</ResponseField>
+
+<ResponseField name="postDataJSON" type="Effect.Effect<Option.Option<any>, PlaywrightError>">
+  Returns parsed request's body for form-urlencoded and JSON requests.
+</ResponseField>
+
+<ResponseField name="redirectedFrom" type="() => Option.Option<PlaywrightRequest>">
+  Request that was redirected by the server to this one, if any.
+</ResponseField>
+
+<ResponseField name="redirectedTo" type="() => Option.Option<PlaywrightRequest>">
+  New request issued by the browser if the server responded with redirect.
+</ResponseField>
+
+<ResponseField name="resourceType" type="() => string">
+  Contains the request's resource type as it was perceived by the rendering engine.
+</ResponseField>
+
+<ResponseField name="response" type="Effect.Effect<Option.Option<PlaywrightResponse>, PlaywrightError>">
+  Returns the matching Response object, or null if the response was not received due to error.
+</ResponseField>
+
+<ResponseField name="serviceWorker" type="() => Option.Option<PlaywrightWorker>">
+  Returns the ServiceWorker that initiated this request.
+</ResponseField>
+
+<ResponseField name="sizes" type="Effect.Effect<{ requestBodySize: number; requestHeadersSize: number; responseBodySize: number; responseHeadersSize: number }, PlaywrightError>">
+  Returns resource size information for given request.
+</ResponseField>
+
+<ResponseField name="timing" type="() => ResourceTiming">
+  Returns resource timing information for given request.
+</ResponseField>
+
+<ResponseField name="url" type="() => string">
+  URL of the request.
+</ResponseField>
+
+## PlaywrightResponse
+
+Wraps Playwright's `Response` object with Effect-based methods for handling HTTP responses.
+
+<ResponseField name="allHeaders" type="Effect.Effect<Record<string, string>, PlaywrightError>">
+  An object with all the response HTTP headers associated with this response.
+</ResponseField>
+
+<ResponseField name="body" type="Effect.Effect<Buffer, PlaywrightError>">
+  Returns the buffer with response body.
+</ResponseField>
+
+<ResponseField name="finished" type="Effect.Effect<null, PlaywrightError>">
+  Waits for this response to finish, returns always null.
+</ResponseField>
+
+<ResponseField name="frame" type="Effect.Effect<PlaywrightFrameService>">
+  Returns the Frame that initiated this response.
+</ResponseField>
+
+<ResponseField name="fromServiceWorker" type="() => boolean">
+  Returns whether this response was served by a service worker.
+</ResponseField>
+
+<ResponseField name="headers" type="() => Record<string, string>">
+  An object with the response HTTP headers. The header names are lower-cased.
+</ResponseField>
+
+<ResponseField name="headersArray" type="Effect.Effect<Array<{ name: string; value: string }>, PlaywrightError>">
+  An array with all the response HTTP headers.
+</ResponseField>
+
+<ResponseField name="headerValue" type="(name: string) => Effect.Effect<Option.Option<string>, PlaywrightError>">
+  Returns the value of the header matching the name. The name is case insensitive.
+</ResponseField>
+
+<ResponseField name="headerValues" type="(name: string) => Effect.Effect<string[], PlaywrightError>">
+  Returns all values of the headers matching the name, for example set-cookie. The name is case insensitive.
+</ResponseField>
+
+<ResponseField name="json" type="Effect.Effect<any, PlaywrightError>">
+  Returns the JSON representation of response body.
+</ResponseField>
+
+<ResponseField name="ok" type="() => boolean">
+  Contains a boolean stating whether the response was successful (status in the range 200-299) or not.
+</ResponseField>
+
+<ResponseField name="request" type="() => PlaywrightRequest">
+  Returns the matching Request object.
+</ResponseField>
+
+<ResponseField name="securityDetails" type="Effect.Effect<Option.Option<SecurityDetails>, PlaywrightError>">
+  Returns SSL and other security information.
+</ResponseField>
+
+<ResponseField name="serverAddr" type="Effect.Effect<Option.Option<{ ipAddress: string; port: number }>, PlaywrightError>">
+  Returns the IP address and port of the server.
+</ResponseField>
+
+<ResponseField name="status" type="() => number">
+  Contains the status code of the response (e.g., 200 for a success).
+</ResponseField>
+
+<ResponseField name="statusText" type="() => string">
+  Contains the status text of the response (e.g. usually an "OK" for a success).
+</ResponseField>
+
+<ResponseField name="text" type="Effect.Effect<string, PlaywrightError>">
+  Returns the text representation of response body.
+</ResponseField>
+
+<ResponseField name="url" type="() => string">
+  Contains the URL of the response.
+</ResponseField>
+
+## PlaywrightDialog
+
+Wraps Playwright's `Dialog` object for handling JavaScript dialogs (alert, confirm, prompt, beforeunload).
+
+<ResponseField name="accept" type="(promptText?: string) => Effect.Effect<void, PlaywrightError>">
+  Returns when the dialog has been accepted. Optional prompt text can be provided for prompt dialogs.
+</ResponseField>
+
+<ResponseField name="defaultValue" type="() => string">
+  If dialog is prompt, returns default prompt value. Otherwise, returns empty string.
+</ResponseField>
+
+<ResponseField name="dismiss" type="Effect.Effect<void, PlaywrightError>">
+  Returns when the dialog has been dismissed.
+</ResponseField>
+
+<ResponseField name="message" type="() => string">
+  A message displayed in the dialog.
+</ResponseField>
+
+<ResponseField name="page" type="() => Option.Option<PlaywrightPageService>">
+  Returns the page that initiated the dialog.
+</ResponseField>
+
+<ResponseField name="type" type="() => string">
+  Returns dialog's type, can be one of: alert, beforeunload, confirm, or prompt.
+</ResponseField>
+
+## PlaywrightDownload
+
+Wraps Playwright's `Download` object for handling file downloads.
+
+<ResponseField name="cancel" type="Effect.Effect<void, PlaywrightError>">
+  Cancels the download. Will wait for the download to finish if necessary.
+</ResponseField>
+
+<ResponseField name="stream" type="Stream.Stream<Uint8Array, PlaywrightError>">
+  Creates a stream of the download data. Custom method added in effect-playwright v0.2.0.
+</ResponseField>
+
+<ResponseField name="delete" type="Effect.Effect<void, PlaywrightError>">
+  Deletes the downloaded file. Will wait for the download to finish if necessary.
+</ResponseField>
+
+<ResponseField name="failure" type="Effect.Effect<Option.Option<string | null>, PlaywrightError>">
+  Returns download error if any. Will wait for the download to finish if necessary.
+</ResponseField>
+
+<ResponseField name="page" type="() => PlaywrightPageService">
+  Returns the page that initiated the download.
+</ResponseField>
+
+<ResponseField name="path" type="Effect.Effect<Option.Option<string | null>, PlaywrightError>">
+  Returns path to the downloaded file in case of successful download.
+</ResponseField>
+
+<ResponseField name="saveAs" type="(path: string) => Effect.Effect<void, PlaywrightError>">
+  Saves the download to a user-specified path. It is safe to call this method while the download is still in progress.
+</ResponseField>
+
+<ResponseField name="suggestedFilename" type="() => string">
+  Returns suggested filename for this download. It is typically computed by the browser from the Content-Disposition response header.
+</ResponseField>
+
+<ResponseField name="url" type="() => string">
+  Returns downloaded url.
+</ResponseField>
+
+<ResponseField name="use" type="<R>(f: (download: Download) => Promise<R>) => Effect.Effect<R, PlaywrightError>">
+  Helper method to access the underlying Playwright Download object.
+</ResponseField>
+
+## PlaywrightFileChooser
+
+Wraps Playwright's `FileChooser` object for handling file upload dialogs.
+
+<ResponseField name="element" type="() => ElementHandle">
+  Returns the input element associated with this file chooser.
+</ResponseField>
+
+<ResponseField name="isMultiple" type="() => boolean">
+  Returns whether this file chooser accepts multiple files.
+</ResponseField>
+
+<ResponseField name="page" type="() => PlaywrightPageService">
+  Returns the page this file chooser belongs to.
+</ResponseField>
+
+<ResponseField name="setFiles" type="(files: string | string[] | FilePayload | FilePayload[], options?: { noWaitAfter?: boolean; timeout?: number }) => Effect.Effect<void, PlaywrightError>">
+  Sets the value of the file input this chooser is associated with. If some of the file paths are relative, they are resolved relative to the current working directory.
+</ResponseField>
+
+## PlaywrightWorker
+
+Wraps Playwright's `Worker` object for handling web workers and service workers.
+
+<ResponseField name="evaluate" type="<R, Arg = void>(pageFunction: PageFunction<Arg, R>, arg?: Arg) => Effect.Effect<R, PlaywrightError>">
+  Returns the return value of pageFunction. Allows to pass an argument to the pageFunction.
+</ResponseField>
+
+<ResponseField name="url" type="() => string">
+  Returns the URL of the web worker.
+</ResponseField>

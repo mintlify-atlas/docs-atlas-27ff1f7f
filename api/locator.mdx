@@ -1,0 +1,240 @@
+---
+title: Locator
+description: Service for interacting with page elements
+---
+
+The `PlaywrightLocator` service provides methods for interacting with elements on a page.
+
+## Methods
+
+### click
+
+Clicks the element.
+
+```typescript
+click(
+  options?: ClickOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="options" type="ClickOptions">
+  Optional click options (button, clickCount, delay, position, modifiers, etc.)
+</ParamField>
+
+**Returns:** Effect that completes when the element is clicked
+
+### fill
+
+Fills the input field.
+
+```typescript
+fill(
+  value: string,
+  options?: FillOptions
+): Effect.Effect<void, PlaywrightError>
+```
+
+<ParamField path="value" type="string" required>
+  The value to fill in the input field
+</ParamField>
+
+<ParamField path="options" type="FillOptions">
+  Optional fill options (force, noWaitAfter, timeout)
+</ParamField>
+
+**Returns:** Effect that completes when the field is filled
+
+### getAttribute
+
+Gets an attribute value.
+
+```typescript
+getAttribute(
+  name: string,
+  options?: GetAttributeOptions
+): Effect.Effect<string | null, PlaywrightError>
+```
+
+<ParamField path="name" type="string" required>
+  The name of the attribute to get
+</ParamField>
+
+<ParamField path="options" type="GetAttributeOptions">
+  Optional options (timeout)
+</ParamField>
+
+**Returns:** Effect that resolves to the attribute value or null if not found
+
+### innerText
+
+Gets the inner text.
+
+```typescript
+innerText(
+  options?: InnerTextOptions
+): Effect.Effect<string, PlaywrightError>
+```
+
+<ParamField path="options" type="InnerTextOptions">
+  Optional options (timeout)
+</ParamField>
+
+**Returns:** Effect that resolves to the element's inner text
+
+### innerHTML
+
+Gets the inner HTML.
+
+```typescript
+innerHTML(
+  options?: InnerHTMLOptions
+): Effect.Effect<string, PlaywrightError>
+```
+
+<ParamField path="options" type="InnerHTMLOptions">
+  Optional options (timeout)
+</ParamField>
+
+**Returns:** Effect that resolves to the element's inner HTML
+
+### inputValue
+
+Gets the input value.
+
+```typescript
+inputValue(
+  options?: InputValueOptions
+): Effect.Effect<string, PlaywrightError>
+```
+
+<ParamField path="options" type="InputValueOptions">
+  Optional options (timeout)
+</ParamField>
+
+**Returns:** Effect that resolves to the input element's value
+
+### textContent
+
+Gets the text content.
+
+```typescript
+textContent(
+  options?: TextContentOptions
+): Effect.Effect<string | null, PlaywrightError>
+```
+
+<ParamField path="options" type="TextContentOptions">
+  Optional options (timeout)
+</ParamField>
+
+**Returns:** Effect that resolves to the element's text content or null
+
+### count
+
+Counts the number of matched elements.
+
+```typescript
+count: Effect.Effect<number, PlaywrightError>
+```
+
+**Returns:** Effect that resolves to the number of matched elements
+
+### first
+
+Returns a locator that points to the first matched element.
+
+```typescript
+first(): PlaywrightLocator.Service
+```
+
+**Returns:** PlaywrightLocator service for the first element
+
+### last
+
+Returns a locator that points to the last matched element.
+
+```typescript
+last(): PlaywrightLocator.Service
+```
+
+**Returns:** PlaywrightLocator service for the last element
+
+### nth
+
+Returns a locator that points to the nth matched element.
+
+```typescript
+nth(index: number): PlaywrightLocator.Service
+```
+
+<ParamField path="index" type="number" required>
+  Zero-based index of the element to select
+</ParamField>
+
+**Returns:** PlaywrightLocator service for the nth element
+
+### evaluate
+
+Evaluates a function on the matched element.
+
+```typescript
+evaluate<R, Arg = void, E extends SVGElement | HTMLElement = SVGElement | HTMLElement>(
+  pageFunction: (element: E, arg: Unboxed<Arg>) => R | Promise<R>,
+  arg?: Arg,
+  options?: { timeout?: number }
+): Effect.Effect<R, PlaywrightError>
+```
+
+<ParamField path="pageFunction" type="function" required>
+  The function to evaluate on the element
+</ParamField>
+
+<ParamField path="arg" type="any">
+  Optional argument to pass to the function
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional options with timeout
+</ParamField>
+
+**Returns:** Effect that resolves to the function's return value
+
+**Example:**
+
+```typescript
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { chromium } from "@playwright/test";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+  const locator = yield* page.locator("button");
+  const buttonContent = yield* locator.evaluate((button) => button.textContent());
+}).pipe(PlaywrightEnvironment.provideBrowser, Effect.provide(PlaywrightEnvironment.layer(chromium)));
+```
+
+### use
+
+A generic utility to execute any promise-based method on the underlying Playwright `Locator`.
+
+Can be used to access any Locator functionality not directly exposed by this service.
+
+```typescript
+use<T>(
+  f: (locator: Locator) => Promise<T>
+): Effect.Effect<T, PlaywrightError>
+```
+
+<ParamField path="f" type="function" required>
+  A function that takes the Playwright `Locator` and returns a `Promise`
+</ParamField>
+
+**Returns:** Effect that wraps the promise and returns its result
+
+**Example:**
+
+```typescript
+const isVisible = yield* locator.use((l) => l.isVisible());
+```

@@ -1,0 +1,285 @@
+---
+title: Playwright
+description: Main service for launching browsers and connecting to CDP
+---
+
+The `Playwright` service provides methods for launching browser instances and connecting to browsers via Chrome DevTools Protocol (CDP).
+
+## Methods
+
+### launch
+
+Launches a new browser instance.
+
+It is the caller's responsibility to manage the browser's lifecycle and close it when no longer needed. For automatic scope-based management, use `launchScoped` instead.
+
+```typescript
+launch(
+  browserType: BrowserType,
+  options?: LaunchOptions
+): Effect.Effect<PlaywrightBrowser.Service, PlaywrightError>
+```
+
+<ParamField path="browserType" type="BrowserType" required>
+  The browser type to launch (e.g. chromium, firefox, webkit)
+</ParamField>
+
+<ParamField path="options" type="LaunchOptions">
+  Optional launch options
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowser service
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const browser = yield* Playwright.launch(chromium);
+  // ... use browser ...
+  yield* browser.close;
+});
+
+await Effect.runPromise(program);
+```
+
+### launchScoped
+
+Launches a new browser instance managed by a Scope.
+
+This method automatically closes the browser when the scope is closed.
+
+```typescript
+launchScoped(
+  browserType: BrowserType,
+  options?: LaunchOptions
+): Effect.Effect<PlaywrightBrowser.Service, PlaywrightError, Scope>
+```
+
+<ParamField path="browserType" type="BrowserType" required>
+  The browser type to launch (e.g. chromium, firefox, webkit)
+</ParamField>
+
+<ParamField path="options" type="LaunchOptions">
+  Optional launch options
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowser service with Scope requirement
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const browser = yield* Playwright.launchScoped(chromium);
+  // Browser will be closed automatically when scope closes
+});
+
+await Effect.runPromise(program);
+```
+
+### launchPersistentContext
+
+Launches a persistent browser context.
+
+Unlike `launchPersistentContextScoped`, this method does **not** close the context automatically when scope is closed. You are responsible for closing it.
+
+This launches a browser with a persistent profile under `userDataDir` and returns the single persistent context for that browser.
+
+Closing this context also closes the underlying browser process.
+
+```typescript
+launchPersistentContext(
+  browserType: BrowserType,
+  userDataDir: string,
+  options?: LaunchPersistentContextOptions
+): Effect.Effect<PlaywrightBrowserContext.Service, PlaywrightError>
+```
+
+<ParamField path="browserType" type="BrowserType" required>
+  The browser type to launch (e.g. chromium, firefox, webkit)
+</ParamField>
+
+<ParamField path="userDataDir" type="string" required>
+  Directory used for persistent browser profile data. Pass `""` for a temporary profile directory
+</ParamField>
+
+<ParamField path="options" type="LaunchPersistentContextOptions">
+  Optional persistent context launch options
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowserContext service
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const context = yield* playwright.launchPersistentContext(
+    chromium,
+    "./.playwright-profile",
+  );
+
+  const page = yield* context.newPage;
+  yield* page.goto("https://example.com");
+
+  // Closes the persistent context and browser process.
+  yield* context.close;
+});
+
+await Effect.runPromise(program);
+```
+
+If you call this non-scoped variant inside a scope, add a finalizer for cleanup:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const context = yield* playwright.launchPersistentContext(
+    chromium,
+    "./.playwright-profile",
+  );
+
+  yield* Effect.addFinalizer(() => context.close.pipe(Effect.ignore));
+});
+
+await Effect.runPromise(program.pipe(Effect.scoped));
+```
+
+### launchPersistentContextScoped
+
+Launches a persistent browser context managed by a Scope.
+
+This automatically closes the persistent context (and therefore the browser process) when the scope is closed.
+
+```typescript
+launchPersistentContextScoped(
+  browserType: BrowserType,
+  userDataDir: string,
+  options?: LaunchPersistentContextOptions
+): Effect.Effect<PlaywrightBrowserContext.Service, PlaywrightError, Scope>
+```
+
+<ParamField path="browserType" type="BrowserType" required>
+  The browser type to launch (e.g. chromium, firefox, webkit)
+</ParamField>
+
+<ParamField path="userDataDir" type="string" required>
+  Directory used for persistent browser profile data. Pass `""` for a temporary profile directory
+</ParamField>
+
+<ParamField path="options" type="LaunchPersistentContextOptions">
+  Optional persistent context launch options
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowserContext service with Scope requirement
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const context = yield* playwright.launchPersistentContextScoped(
+    chromium,
+    "./.playwright-profile",
+  );
+
+  const page = yield* context.newPage;
+  yield* page.goto("https://example.com");
+  // Context/browser cleanup is automatic when scope closes.
+}).pipe(Effect.scoped);
+
+await Effect.runPromise(program);
+```
+
+### connectCDP
+
+Connects to a browser instance via Chrome DevTools Protocol (CDP).
+
+Unlike `connectCDPScoped`, this method does **not** close the connection when the scope is closed. It is the caller's responsibility to manage the connection's lifecycle.
+
+```typescript
+connectCDP(
+  cdpUrl: string,
+  options?: ConnectOverCDPOptions
+): Effect.Effect<PlaywrightBrowser.Service, PlaywrightError>
+```
+
+<ParamField path="cdpUrl" type="string" required>
+  The CDP URL to connect to
+</ParamField>
+
+<ParamField path="options" type="ConnectOverCDPOptions">
+  Optional options for connecting to the CDP URL
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowser service
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDP(cdpUrl);
+  yield* Effect.addFinalizer(() => browser.close.pipe(Effect.ignore));
+});
+
+await Effect.runPromise(program);
+```
+
+### connectCDPScoped
+
+Connects to a browser instance via Chrome DevTools Protocol (CDP) managed by a Scope.
+
+This method automatically closes the connection when the scope is closed.
+
+Note that closing a CDP connection does **not** close the browser instance itself, only the CDP connection.
+
+```typescript
+connectCDPScoped(
+  cdpUrl: string,
+  options?: ConnectOverCDPOptions
+): Effect.Effect<PlaywrightBrowser.Service, PlaywrightError, Scope>
+```
+
+<ParamField path="cdpUrl" type="string" required>
+  The CDP URL to connect to
+</ParamField>
+
+<ParamField path="options" type="ConnectOverCDPOptions">
+  Optional options for connecting to the CDP URL
+</ParamField>
+
+**Returns:** Effect that resolves to a PlaywrightBrowser service with Scope requirement
+
+**Example:**
+
+```typescript
+import { Effect } from "effect";
+import { Playwright } from "effect-playwright";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.connectCDPScoped(cdpUrl);
+  // Connection will be closed automatically when scope closes
+});
+
+await Effect.runPromise(program);
+```

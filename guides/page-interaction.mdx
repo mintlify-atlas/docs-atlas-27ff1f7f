@@ -1,0 +1,513 @@
+---
+title: Page Interaction
+description: Navigate pages, interact with elements, fill forms, and execute JavaScript with effect-playwright
+---
+
+This guide covers all aspects of page interaction, from navigation to element manipulation and JavaScript execution.
+
+## Navigation
+
+### Basic Navigation
+
+Navigate to URLs using the `goto` method:
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  // Navigate to a URL
+  yield* page.goto("https://example.com");
+  
+  console.log(`Current URL: ${page.url()}`);
+  console.log(`Page title: ${yield* page.title}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Navigation Options
+
+Control navigation behavior with options:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com", {
+    waitUntil: "domcontentloaded",  // Wait state: load, domcontentloaded, networkidle
+    timeout: 30000,                  // Navigation timeout in milliseconds
+    referer: "https://google.com",  // Set referer header
+  });
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Waiting for Navigation
+
+Wait for the page to navigate to a specific URL:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Click a link and wait for navigation
+  const loginButton = page.locator("a[href='/login']");
+  yield* loginButton.click();
+  
+  // Wait for the URL to change
+  yield* page.waitForURL("**/login");
+  
+  console.log(`Navigated to: ${page.url()}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Waiting for Load States
+
+<Tip>
+Playwright auto-waits before most actions, so explicit waiting is rarely needed.
+</Tip>
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Wait for specific load states
+  yield* page.waitForLoadState("load");              // Wait for load event
+  yield* page.waitForLoadState("domcontentloaded"); // Wait for DOMContentLoaded
+  yield* page.waitForLoadState("networkidle");      // Wait for no network requests
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Page Reload
+
+Reload the current page:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Reload the page
+  yield* page.reload;
+  
+  console.log("Page reloaded");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Locators
+
+Locators are the primary way to interact with elements on a page. They use auto-waiting and auto-retry logic.
+
+### Creating Locators
+
+<Tabs>
+  <Tab title="CSS Selector">
+    ```typescript
+    const button = page.locator("button#submit");
+    const input = page.locator("input[name='email']");
+    const div = page.locator("div.container");
+    ```
+  </Tab>
+  <Tab title="By Role">
+    ```typescript
+    const button = page.getByRole("button", { name: "Submit" });
+    const link = page.getByRole("link", { name: "Learn more" });
+    const heading = page.getByRole("heading", { level: 1 });
+    ```
+  </Tab>
+  <Tab title="By Text">
+    ```typescript
+    const element = page.getByText("Welcome");
+    const partial = page.getByText("Welcome", { exact: false });
+    const regex = page.getByText(/welcome/i);
+    ```
+  </Tab>
+  <Tab title="By Label">
+    ```typescript
+    const input = page.getByLabel("Email address");
+    const checkbox = page.getByLabel("Accept terms");
+    ```
+  </Tab>
+  <Tab title="By Test ID">
+    ```typescript
+    const button = page.getByTestId("submit-button");
+    const form = page.getByTestId("login-form");
+    ```
+  </Tab>
+</Tabs>
+
+### Locator Methods
+
+Filter locators to narrow down elements:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Get all buttons
+  const buttons = page.locator("button");
+  
+  // Get the first button
+  const firstButton = buttons.first();
+  
+  // Get the last button
+  const lastButton = buttons.last();
+  
+  // Get the nth button (zero-indexed)
+  const thirdButton = buttons.nth(2);
+  
+  // Count matching elements
+  const buttonCount = yield* buttons.count;
+  console.log(`Found ${buttonCount} buttons`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Clicking Elements
+
+Click elements using locators:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Basic click
+  const button = page.locator("button#submit");
+  yield* button.click();
+  
+  // Click with options
+  const link = page.locator("a[href='/about']");
+  yield* link.click({
+    button: "right",      // Click with right mouse button
+    clickCount: 2,        // Double click
+    delay: 100,           // Delay between mousedown and mouseup
+    force: true,          // Force click even if element is not visible
+    modifiers: ["Shift"], // Hold modifier keys
+    timeout: 5000,        // Click timeout
+  });
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+<Warning>
+Use `force: true` sparingly. It bypasses actionability checks and can lead to flaky automation.
+</Warning>
+
+## Filling Forms
+
+### Text Input
+
+Fill input fields using the `fill` method:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com/login");
+  
+  // Fill text inputs
+  const emailInput = page.locator("input[name='email']");
+  yield* emailInput.fill("user@example.com");
+  
+  const passwordInput = page.locator("input[name='password']");
+  yield* passwordInput.fill("secretpassword");
+  
+  // Submit the form
+  const submitButton = page.getByRole("button", { name: "Sign in" });
+  yield* submitButton.click();
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Complete Form Example
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com/signup");
+  
+  // Fill multiple form fields
+  yield* page.getByLabel("First Name").fill("John");
+  yield* page.getByLabel("Last Name").fill("Doe");
+  yield* page.getByLabel("Email").fill("john.doe@example.com");
+  yield* page.getByLabel("Password").fill("SecurePass123!");
+  
+  // Check a checkbox
+  const termsCheckbox = page.getByLabel("I accept the terms");
+  yield* termsCheckbox.click();
+  
+  // Submit
+  const submitButton = page.getByRole("button", { name: "Sign up" });
+  yield* submitButton.click();
+  
+  // Wait for navigation to complete
+  yield* page.waitForURL("**/welcome");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Getting Element Data
+
+### Text Content
+
+Retrieve text from elements:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Get inner text (visible text only)
+  const heading = page.getByRole("heading", { level: 1 });
+  const headingText = yield* heading.innerText();
+  console.log(`Heading: ${headingText}`);
+  
+  // Get text content (includes hidden text)
+  const paragraph = page.locator("p.description");
+  const paragraphText = yield* paragraph.textContent();
+  console.log(`Description: ${paragraphText}`);
+  
+  // Get input value
+  const input = page.locator("input[name='email']");
+  const inputValue = yield* input.inputValue();
+  console.log(`Input value: ${inputValue}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### HTML Content
+
+Get the HTML of an element:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  const container = page.locator("div.content");
+  const html = yield* container.innerHTML();
+  
+  console.log(`Container HTML: ${html}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Attributes
+
+Get element attributes:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  const link = page.locator("a.external");
+  
+  // Get specific attribute
+  const href = yield* link.getAttribute("href");
+  const target = yield* link.getAttribute("target");
+  
+  console.log(`Link href: ${href}`);
+  console.log(`Link target: ${target}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## JavaScript Evaluation
+
+### Page-Level Evaluation
+
+Execute JavaScript in the page context:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  // Get page dimensions
+  const dimensions = yield* page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+    devicePixelRatio: window.devicePixelRatio,
+  }));
+  
+  console.log(`Dimensions: ${dimensions.width}x${dimensions.height}`);
+  console.log(`Device Pixel Ratio: ${dimensions.devicePixelRatio}`);
+  
+  // Execute code with arguments
+  const result = yield* page.evaluate(
+    (data) => {
+      console.log(`Received: ${data.message}`);
+      return data.value * 2;
+    },
+    { message: "Hello", value: 42 }
+  );
+  
+  console.log(`Result: ${result}`); // 84
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+### Element-Level Evaluation
+
+Execute JavaScript on specific elements:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com");
+  
+  const button = page.locator("button#submit");
+  
+  // Evaluate on the element
+  const buttonInfo = yield* button.evaluate((element) => ({
+    tagName: element.tagName,
+    text: element.textContent,
+    disabled: element.disabled,
+    className: element.className,
+  }));
+  
+  console.log(`Button tag: ${buttonInfo.tagName}`);
+  console.log(`Button text: ${buttonInfo.text}`);
+  console.log(`Is disabled: ${buttonInfo.disabled}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Working with Frames
+
+Access and interact with iframes:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  yield* page.goto("https://example.com/page-with-iframe");
+  
+  // Get all frames
+  const frames = yield* page.frames;
+  console.log(`Number of frames: ${frames.length}`);
+  
+  // Interact with frame content
+  for (const frame of frames) {
+    console.log(`Frame URL: ${frame.url()}`);
+  }
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+## Event Handling
+
+Listen to page events:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  // Monitor console messages
+  yield* page.eventStream("console").pipe(
+    Stream.runForEach((message) =>
+      Effect.log(`Console: ${message.text()}`)  
+    ),
+    Effect.fork
+  );
+  
+  // Monitor network requests
+  yield* page.eventStream("request").pipe(
+    Stream.runForEach((request) =>
+      Effect.gen(function* () {
+        yield* Effect.log(`Request: ${request.url()}`);
+      })
+    ),
+    Effect.fork
+  );
+  
+  // Monitor responses
+  yield* page.eventStream("response").pipe(
+    Stream.runForEach((response) =>
+      Effect.gen(function* () {
+        const status = yield* response.status;
+        const url = yield* response.url;
+        yield* Effect.log(`Response: ${url} - ${status}`);
+      })
+    ),
+    Effect.fork
+  );
+  
+  yield* page.goto("https://example.com");
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```
+
+<Steps>
+  <Step title="Create event stream">
+    Use `eventStream` to create a stream of events from the page.
+  </Step>
+  <Step title="Process events">
+    Use `Stream.runForEach` to process each event.
+  </Step>
+  <Step title="Fork the stream">
+    Fork the effect so it runs in the background without blocking.
+  </Step>
+</Steps>
+
+## Accessing Native Playwright
+
+Access underlying Playwright objects for advanced use cases:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+  
+  // Use native Page API
+  const screenshot = yield* page.use((p) => p.screenshot({
+    path: "screenshot.png",
+    fullPage: true,
+  }));
+  
+  // Use native Locator API  
+  const locator = page.locator("button");
+  const isVisible = yield* locator.use((l) => l.isVisible());
+  
+  console.log(`Locator visible: ${isVisible}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+```

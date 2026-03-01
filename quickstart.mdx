@@ -1,80 +1,227 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get started with effect-playwright by building your first browser automation script
 ---
 
-## Get started in three steps
+# Quick start
 
-Get your documentation site running locally and make your first customization.
+Learn how to use effect-playwright with a complete working example.
 
-### Step 1: Set up your local environment
+## Basic example
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Here's a simple script that launches a browser, navigates to a page, and prints the page title:
+
+```typescript
+import { Playwright } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  yield* page.goto("https://example.com");
+  console.log(`Page title: ${page.title()}`);
+}).pipe(Effect.scoped, Effect.provide(Playwright.layer));
+
+await Effect.runPromise(program);
+```
+
+<Tip>
+  The `launchScoped` method automatically closes the browser when the scope ends, preventing resource leaks.
+</Tip>
+
+## Understanding the code
+
+Let's break down what's happening:
+
+<Steps>
+  <Step title="Import dependencies">
+    Import the `Playwright` service from effect-playwright, `Effect` from effect, and the browser type from playwright-core:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```typescript
+    import { Playwright } from "effect-playwright";
+    import { Effect } from "effect";
+    import { chromium } from "playwright-core";
+    ```
+  </Step>
+
+  <Step title="Create an Effect program">
+    Use `Effect.gen` to create a generator-based Effect program:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```typescript
+    const program = Effect.gen(function* () {
+      const playwright = yield* Playwright;
+      // ...
+    });
+    ```
+  </Step>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+  <Step title="Launch a scoped browser">
+    Use `launchScoped` to launch a browser that will be automatically closed:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```typescript
+    const browser = yield* playwright.launchScoped(chromium);
+    ```
+    
+    <Note>
+      The browser will be closed automatically when the effect's scope ends, even if an error occurs.
+    </Note>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Create a page and navigate">
+    Create a new page and navigate to a URL:
+    
+    ```typescript
+    const page = yield* browser.newPage();
+    yield* page.goto("https://example.com");
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Provide the layer and run">
+    Pipe the program through `Effect.scoped`, provide the Playwright layer, and run it:
+    
+    ```typescript
+    await Effect.runPromise(
+      program.pipe(Effect.scoped, Effect.provide(Playwright.layer))
+    );
+    ```
+  </Step>
+</Steps>
 
-### Step 3: Go live
+## Managing lifecycle
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Using `launchScoped` is the recommended way to manage browser lifecycle. It ensures the browser is closed automatically when the effect's scope ends:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  // Browser will be closed automatically after this block
+}).pipe(Effect.scoped);
+```
+
+If you need manual control, use `launch` and close the browser explicitly:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launch(chromium);
+  
+  // ... use browser ...
+  
+  yield* browser.close;
+});
+```
+
+<Warning>
+  When using `launch` instead of `launchScoped`, you are responsible for closing the browser to prevent resource leaks.
+</Warning>
+
+## Browser options
+
+You can pass launch options to customize browser behavior:
+
+```typescript
+const browser = yield* playwright.launchScoped(chromium, {
+  headless: false,
+  slowMo: 100,
+  args: ['--start-maximized'],
+});
+```
+
+## Using different browsers
+
+effect-playwright supports all Playwright browsers:
+
+<CodeGroup>
+
+```typescript Chromium
+import { chromium } from "playwright-core";
+
+const browser = yield* playwright.launchScoped(chromium);
+```
+
+```typescript Firefox
+import { firefox } from "playwright-core";
+
+const browser = yield* playwright.launchScoped(firefox);
+```
+
+```typescript WebKit
+import { webkit } from "playwright-core";
+
+const browser = yield* playwright.launchScoped(webkit);
+```
+
+</CodeGroup>
+
+## Error handling
+
+All methods return effects that can fail with a `PlaywrightError`. Use Effect's error handling to manage failures:
+
+```typescript
+import { Playwright, PlaywrightError } from "effect-playwright";
+import { Effect } from "effect";
+import { chromium } from "playwright-core";
+
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  yield* page.goto("https://example.com");
+}).pipe(
+  Effect.scoped,
+  Effect.provide(Playwright.layer),
+  Effect.catchTag("PlaywrightError", (error) =>
+    Effect.sync(() => {
+      console.error("Browser automation failed:", error.reason);
+    })
+  )
+);
+
+await Effect.runPromise(program);
+```
+
+<Note>
+  Playwright does not support interruption, so `Effect.timeout` does not behave as you might expect. Use Playwright's built-in `timeout` options instead.
+</Note>
+
+## Accessing native Playwright
+
+If you need to access functionality from the underlying Playwright objects that isn't directly exposed, use the `use` method:
+
+```typescript
+const program = Effect.gen(function* () {
+  const playwright = yield* Playwright;
+  const browser = yield* playwright.launchScoped(chromium);
+  const page = yield* browser.newPage();
+
+  // Use the native Playwright Page object
+  const screenshot = yield* page.use((p) => p.screenshot());
+});
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+You now have a working effect-playwright setup. Explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Event handling" icon="bell">
+    Learn how to listen to Playwright events as Effect Streams
+  </Card>
+  
+  <Card title="CDP connections" icon="link">
+    Connect to existing browser instances using Chrome DevTools Protocol
+  </Card>
+  
+  <Card title="Experimental features" icon="flask">
+    Explore PlaywrightEnvironment for simplified browser configuration
+  </Card>
+  
+  <Card title="API reference" icon="book">
+    Browse the complete API documentation
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

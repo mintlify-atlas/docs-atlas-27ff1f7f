@@ -1,0 +1,337 @@
+---
+title: Event streams
+description: Learn how to handle Playwright events using Effect Streams
+---
+
+Effect-playwright provides the `eventStream` method to convert Playwright events into Effect `Stream`s. This allows you to process events using Effect's powerful streaming combinators while maintaining type safety.
+
+## The eventStream method
+
+The `eventStream` method is available on browsers, pages, and other Playwright objects. It creates a stream that emits events as they occur:
+
+```typescript
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+
+  // Create a stream of console events
+  const consoleStream = page.eventStream("console");
+  
+  // Process the stream
+  yield* consoleStream.pipe(
+    Stream.runForEach((message) =>
+      Effect.log(`Console: ${message.text()}`)
+    ),
+  );
+});
+```
+
+The stream automatically closes when the underlying resource (page, browser, etc.) closes.
+
+## Effectified event wrappers
+
+`eventStream` returns "Effectified" wrappers for most Playwright objects. For example:
+
+- `Request` events become `PlaywrightRequest`
+- `Response` events become `PlaywrightResponse`
+- `Page` events become `PlaywrightPage`
+- `Dialog` events become `PlaywrightDialog`
+
+From `page.ts:52-73`, these mappings are defined:
+
+```typescript
+const eventMappings = {
+  close: (page: Page) => PlaywrightPage.make(page),
+  console: identity<ConsoleMessage>,
+  crash: (page: Page) => PlaywrightPage.make(page),
+  dialog: (dialog: Dialog) => PlaywrightDialog.make(dialog),
+  domcontentloaded: (page: Page) => PlaywrightPage.make(page),
+  download: (download: Download) => PlaywrightDownload.make(download),
+  filechooser: (fileChooser: FileChooser) =>
+    PlaywrightFileChooser.make(fileChooser),
+  frameattached: (frame: Frame) => PlaywrightFrame.make(frame),
+  framedetached: (frame: Frame) => PlaywrightFrame.make(frame),
+  framenavigated: (frame: Frame) => PlaywrightFrame.make(frame),
+  load: (page: Page) => PlaywrightPage.make(page),
+  pageerror: identity<Error>,
+  popup: (page: Page) => PlaywrightPage.make(page),
+  request: (request: Request) => PlaywrightRequest.make(request),
+  requestfailed: (request: Request) => PlaywrightRequest.make(request),
+  requestfinished: (request: Request) => PlaywrightRequest.make(request),
+  response: (response: Response) => PlaywrightResponse.make(response),
+  websocket: identity<WebSocket>,
+  worker: (worker: Worker) => PlaywrightWorker.make(worker),
+} as const;
+```
+
+This lets you seamlessly use Effect-based methods on event objects.
+
+## Stream implementation details
+
+The `eventStream` implementation from `page.ts:336-355` uses `Stream.asyncPush` with automatic cleanup:
+
+```typescript
+eventStream: <K extends keyof PageEvents>(event: K) =>
+  Stream.asyncPush<PageEvents[K]>((emit) =>
+    Effect.acquireRelease(
+      Effect.sync(() => {
+        page.on(event, emit.single);
+        page.once("close", emit.end);
+      }),
+      () =>
+        Effect.sync(() => {
+          page.off(event, emit.single);
+          page.off("close", emit.end);
+        }),
+    ),
+  ).pipe(
+    Stream.map((e) => {
+      const mapping = eventMappings[event];
+      return mapping(e as any) as ReturnType<(typeof eventMappings)[K]>;
+    }),
+  ),
+```
+
+This pattern:
+1. Registers event listeners when the stream starts
+2. Emits events as they occur
+3. Automatically ends the stream when the page closes
+4. Cleans up listeners when the stream is interrupted or ends
+
+## Forking background tasks
+
+Event streams run indefinitely until the resource closes, so you typically need to fork them to run in the background:
+
+```typescript
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+
+  // Fork the stream to run in background
+  yield* page.eventStream("request").pipe(
+    Stream.runForEach((request) =>
+      Effect.log(`Request: ${request.url()}`)
+    ),
+    Effect.fork,
+  );
+
+  // Main program continues while stream runs in background
+  yield* page.goto("https://example.com");
+  yield* page.locator("button").click();
+}).pipe(PlaywrightEnvironment.withBrowser);
+```
+
+Without `Effect.fork`, the stream would block the main program flow indefinitely.
+
+## Monitoring network requests
+
+Here's a complete example of monitoring network requests from the README:
+
+```typescript
+import { PlaywrightBrowser } from "effect-playwright";
+import { PlaywrightEnvironment } from "effect-playwright/experimental";
+import { Effect, Stream } from "effect";
+import { chromium } from "playwright-core";
+
+const liveLayer = PlaywrightEnvironment.layer(chromium, {
+  headless: false,
+});
+
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+  const page = yield* browser.newPage();
+
+  // Create a stream of request events
+  yield* page.eventStream("request").pipe(
+    Stream.runForEach((request) =>
+      Effect.gen(function* () {
+        yield* Effect.log(`Request: ${request.url()}`);
+      }),
+    ),
+
+    // Fork to run it in the background
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+}).pipe(PlaywrightEnvironment.withBrowser);
+
+await Effect.runPromise(program.pipe(Effect.provide(liveLayer)));
+```
+
+This logs every network request made by the page.
+
+## Filtering and transforming streams
+
+Use Effect's stream combinators to filter and transform events:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+
+  // Monitor only failed requests
+  yield* page.eventStream("requestfailed").pipe(
+    Stream.runForEach((request) =>
+      Effect.gen(function* () {
+        const failure = request.failure();
+        yield* Effect.logError(
+          `Request failed: ${request.url()} - ${failure?.errorText}`
+        );
+      }),
+    ),
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+});
+```
+
+## Collecting events
+
+You can collect events into an array:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+
+  // Collect all responses in background
+  const responsesFiber = yield* page.eventStream("response").pipe(
+    Stream.take(10), // Take only first 10 responses
+    Stream.runCollect,
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+  
+  // Wait for responses to be collected
+  const responses = yield* responsesFiber.pipe(Fiber.join);
+  
+  yield* Effect.log(`Collected ${responses.length} responses`);
+});
+```
+
+## Handling multiple event types
+
+Monitor multiple event types simultaneously by forking multiple streams:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+
+  // Monitor requests
+  yield* page.eventStream("request").pipe(
+    Stream.runForEach((request) =>
+      Effect.log(`→ ${request.method()} ${request.url()}`)
+    ),
+    Effect.fork,
+  );
+
+  // Monitor responses
+  yield* page.eventStream("response").pipe(
+    Stream.runForEach((response) =>
+      Effect.log(`← ${response.status()} ${response.url()}`)
+    ),
+    Effect.fork,
+  );
+
+  // Monitor console messages
+  yield* page.eventStream("console").pipe(
+    Stream.runForEach((message) =>
+      Effect.log(`[Console] ${message.type()}: ${message.text()}`)
+    ),
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+});
+```
+
+## Browser disconnect events
+
+Monitor browser disconnection with the browser's event stream:
+
+```typescript
+const program = Effect.gen(function* () {
+  const browser = yield* PlaywrightBrowser;
+
+  // Monitor for disconnect
+  yield* browser.eventStream("disconnected").pipe(
+    Stream.runForEach(() =>
+      Effect.logWarning("Browser disconnected")
+    ),
+    Effect.fork,
+  );
+
+  const page = yield* browser.newPage();
+  yield* page.goto("https://example.com");
+});
+```
+
+## Error handling in streams
+
+Handle errors that occur while processing events:
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+
+  yield* page.eventStream("request").pipe(
+    Stream.runForEach((request) =>
+      Effect.gen(function* () {
+        // This might fail
+        const headers = yield* request.use((r) => r.allHeaders());
+        yield* Effect.log(`Headers: ${JSON.stringify(headers)}`);
+      }).pipe(
+        Effect.catchAll((error) =>
+          Effect.logError(`Failed to process request: ${error}`)
+        ),
+      ),
+    ),
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+});
+```
+
+## Performance considerations
+
+<Warning>
+Be mindful of performance when processing high-frequency events like `request` and `response`. If processing takes too long, events may queue up in memory.
+</Warning>
+
+For high-throughput scenarios, consider:
+
+1. **Filtering early**: Use `Stream.filter` to reduce events before processing
+2. **Batching**: Use `Stream.grouped` to process events in batches
+3. **Throttling**: Use `Stream.throttle` to limit processing rate
+4. **Dropping events**: Use `Stream.drop` or `Stream.take` to limit stream size
+
+```typescript
+const program = Effect.gen(function* () {
+  const page = yield* getPage;
+
+  yield* page.eventStream("request").pipe(
+    // Filter to only API requests
+    Stream.filter((req) => req.url().includes("/api/")),
+    // Process in batches of 5
+    Stream.grouped(5),
+    Stream.runForEach((batch) =>
+      Effect.log(`Processed batch of ${batch.length} requests`)
+    ),
+    Effect.fork,
+  );
+
+  yield* page.goto("https://example.com");
+});
+```
+
+## Best practices
+
+1. **Always fork event streams**: Unless you want to block, fork streams with `Effect.fork`
+2. **Use appropriate event types**: Choose the most specific event (e.g., `requestfailed` instead of `request`)
+3. **Handle errors in stream processors**: Wrap stream processing in error handlers
+4. **Limit stream lifetime**: Use `Stream.take` or `Stream.takeUntil` for bounded streams
+5. **Filter early**: Apply filters before expensive operations
+6. **Consider performance**: Be careful with high-frequency events like `request` and `response`
+7. **Clean up automatically**: Let Effect manage listener cleanup through the scope system

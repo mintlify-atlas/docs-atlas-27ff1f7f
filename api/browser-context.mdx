@@ -1,0 +1,79 @@
+---
+title: Browser context
+description: Service for managing browser contexts
+---
+
+The `PlaywrightBrowserContext` service provides methods for managing browser contexts and their pages.
+
+## Methods
+
+### pages
+
+Returns the list of all open pages in the browser context.
+
+```typescript
+pages: Effect.Effect<Array<PlaywrightPage.Service>>
+```
+
+**Returns:** Effect that resolves to an array of PlaywrightPage services
+
+### newPage
+
+Opens a new page in the browser context.
+
+```typescript
+newPage: Effect.Effect<PlaywrightPage.Service, PlaywrightError>
+```
+
+**Returns:** Effect that resolves to a PlaywrightPage service
+
+**Example:**
+
+```typescript
+const page = yield* context.newPage;
+```
+
+### close
+
+Closes the browser context.
+
+```typescript
+close: Effect.Effect<void, PlaywrightError>
+```
+
+**Returns:** Effect that completes when the context is closed
+
+### eventStream
+
+Creates a stream of the given event from the browser context.
+
+```typescript
+eventStream<K extends keyof BrowserContextEvents>(
+  event: K
+): Stream.Stream<EventType>
+```
+
+<ParamField path="event" type="string" required>
+  The event name (e.g., "page", "dialog", "request", "response", "close")
+</ParamField>
+
+**Returns:** Stream of browser context events
+
+**Supported events:**
+- `backgroundpage` - Emitted when a background page is created
+- `close` - Emitted when the context is closed
+- `console` - Emitted when a console message is logged
+- `dialog` - Emitted when a dialog appears
+- `page` - Emitted when a new page is created
+- `request` - Emitted when a request is made
+- `requestfailed` - Emitted when a request fails
+- `requestfinished` - Emitted when a request finishes
+- `response` - Emitted when a response is received
+- `serviceworker` - Emitted when a service worker is created
+- `weberror` - Emitted when a web error occurs
+
+**Example:**
+
+```typescript
+const pageStream = context.eventStream("page");
+```
