@@ -1,0 +1,85 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Effect Playwright",
+  "projectDescription": "An Effect-based wrapper for Playwright bringing functional programming and structured concurrency to browser automation.",
+  "theme": "palm",
+  "primaryColor": "#9333ea",
+  "lightColor": "#a855f7",
+  "darkColor": "#7e22ce",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/resource-management",
+              "concepts/error-handling",
+              "concepts/event-streams"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/browser-automation",
+              "guides/page-interaction",
+              "guides/cdp-connection",
+              "guides/experimental-features"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Services",
+            "pages": [
+              "api/playwright",
+              "api/browser",
+              "api/page",
+              "api/locator",
+              "api/frame",
+              "api/browser-context"
+            ]
+          },
+          {
+            "group": "Common",
+            "pages": [
+              "api/common-types",
+              "api/errors"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Effect integration with Playwright API",
+    "Automatic resource cleanup using Effect Scope",
+    "Type-safe functional error handling",
+    "Event streams for Playwright events",
+    "CDP (Chrome DevTools Protocol) connection support",
+    "Experimental features for advanced use cases"
+  ],
+  "publicApiSurface": [
+    "Playwright",
+    "PlaywrightBrowser",
+    "PlaywrightPage",
+    "PlaywrightBrowserContext",
+    "PlaywrightLocator",
+    "PlaywrightFrame",
+    "PlaywrightError",
+    "PlaywrightEnvironment (experimental)",
+    "BrowserUtils (experimental)"
+  ]
+}
